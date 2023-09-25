@@ -1,6 +1,6 @@
 import torch.nn as nn
 from loguru import logger
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Callable
 
 from .models import BaseNNP
 from .utils import (
@@ -8,7 +8,7 @@ from .utils import (
     GaussianRBF,
     ShiftedSoftplus,
     cosine_cutoff,
-    scatter_add,
+    scatter_softmax
 )
 import torch
 
@@ -106,7 +106,20 @@ def sequential_block(in_features: int, out_features: int):
 
 
 class SakeInteractionBlock(nn.Module):
-    def __init__(self, n_atom_basis: int, n_filters: int):
+    def __init__(
+        self,
+        n_rbf: int = 50,
+        n_atom_basis: int,
+        out_features: int,
+        hidden_features: int,
+        activation: Callable = jax.nn.silu, 
+        n_heads: int = 4,
+        update: bool = True, 
+        use_semantic_attention: bool = True,
+        use_euclidean_attention: bool = True,
+        use_spatial_attention: bool = True,
+        cutoff: Callable = None
+    ):
         """
         Initialize the Sake interaction block.
 
@@ -119,18 +132,118 @@ class SakeInteractionBlock(nn.Module):
 
         """
         super().__init__()
-        n_rbf = 20
-        self.intput_to_feature = nn.Linear(n_atom_basis, n_filters)
-        self.feature_to_output = sequential_block(n_filters, n_atom_basis)
-        self.filter_network = sequential_block(n_rbf, n_filters)
+        self.n_rbf = n_rbf
+        self.n_atom_basis = n_atom_basis
+        self.out_features = out_features
+        self.hidden_features = hidden_features
+        self.activation = activation
+        self.n_heads = n_heads
+        self.update = update
+        self.use_semantic_attention = use_semantic_attention
+        self.use_euclidean_attention = use_euclidean_attention
+        self.use_spatial_attention = use_spatial_attention
+        self.cutoff = cutoff
+        self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.hidden_features) #TODO: implement ContinuousFilterConvolutionWithConcatenation
+        self.n_coefficients = self.n_heads * self.hidden_features
+
+        self.node_mlp = nn.Sequential(
+            [
+                nn.Linear(float('nan'), self.hidden_features),
+                self.activation,
+                nn.Linear(self.hidden_features, self.out_features),
+                self.activation,
+            ]
+        )
+
+        self.semantic_attention_mlp = nn.Sequential(
+            [
+                nn.Dense(self.n_heads),
+                nn.CELU(alpha=2.0),
+            ],
+        )
+
+        self.post_norm_mlp = nn.Sequential(
+            [
+                nn.Linear(float('nan'), self.hidden_features),
+                self.activation,
+                nn.Linear(self,hidden_features, self.hidden_features),
+                self.activation,
+            ]
+        )
+
+        self.x_mixing = nn.Sequential(
+            [
+                nn.Linear(self.n_coefficients, self.n_coefficients, bias=False), #TODO: check the input dimension
+                nn.Tanh()
+            ]
+        )
+
+        log_gamma = -torch.log(torch.linspace(1.0, 5.0, self.n_heads))
+        if self.use_semantic_attention and self.use_euclidean_attention:
+            self.log_gamma = nn.Parameter(log_gamma)
+        else:
+            self.log_gamma = nn.Parameter(torch.ones(self.n_heads))
+
+    def spatial_attention(self, h_e_mtx, x_minus_xt, x_minus_xt_norm, idx_j, n_atoms):
+        # h_e_mtx shape: (n_pairs,  hidden_features * n_heads)
+        # coefficients shape: (n_pairs, hidden_features * n_heads)
+        coefficients = self.x_mixing(h_e_mtx)
+
+        # x_minus_xt shape: (n_pairs, 3)
+        x_minus_xt = x_minus_xt / (x_minus_xt_norm + 1e-5)
+
+        # p: pair axis; x: position axis, c: coefficient axis
+        combinations = torch.einsum("px,pc->pcx", x_minus_xt, coefficients)
+        out_shape = (n_atoms, self.n_coefficients, 3)
+        combinations_sum = torch.zeros(out_shape).scatter_reduce(0,
+            idx_j,
+            combinations,
+            "mean",
+            include_self=False
+        )
+        combinations_norm = (combinations_sum ** 2).sum(-1)
+        h_combinations = self.post_norm_mlp(combinations_norm)
+        return h_combinations
+
+    def aggregate(self, h_e_mtx, idx_j, n_atoms):
+        out_shape = (n_atoms, self.n_coefficients)
+        return torch.zeros(out_shape).scatter_sum(0, idx_j, h_e_mtx)
+
+    def node_model(self, h, h_e, h_combinations):
+        out = torch.cat([h, h_e, h_combinations], dim=-1)
+        out = self.node_mlp(out)
+        out = h + out
+        return out
+
+    def semantic_attention(self, h_e_mtx, idx_j, n_atoms):
+        # att shape: (n_pairs, n_heads)
+        att = self.semantic_attention_mlp(h_e_mtx)
+        semantic_attention = scatter_softmax(att, idx_j, dim_size=n_atoms)
+        return semantic_attention
+
+    def combined_attention(self, x_minus_xt_norm, h_e_mtx, idx_j, n_atoms):
+        # semantic_attention shape: (n_pairs, n_heads)
+        semantic_attention = self.semantic_attention(h_e_mtx, idx_j, n_atoms)
+        if self.cutoff is not None:
+            euclidean_attention = self.cutoff(x_minus_xt_norm)
+        else:
+            euclidean_attention = 1.0
+
+        # combined_attention shape: (n_pairs, n_heads)
+        combined_attention = euclidean_attention * semantic_attention
+        # combined_attention_agg shape: (n_nodes, n_heads)
+        out_shape = (n_atoms, self.n_heads)
+        combined_attention_agg = torch.zeros(out_shape).scatter_add(0, idx_j, combined_attention)
+        combined_attention = combined_attention / combined_attention_agg[idx_j]
+
+        return combined_attention
 
     def forward(
         self,
+        h: torch.Tensor,
         x: torch.Tensor,
-        f_ij: torch.Tensor,
         idx_i: torch.Tensor,
         idx_j: torch.Tensor,
-        rcut_ij: torch.Tensor,
     ) -> torch.Tensor:
         """
         Forward pass for the interaction block.
@@ -139,38 +252,46 @@ class SakeInteractionBlock(nn.Module):
         ----------
         x : torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
             Input feature tensor for atoms.
-        f_ij : torch.Tensor, shape [n_pairs, n_rbf]
             Radial basis functions for pairs of atoms.
         idx_i : torch.Tensor, shape [n_pairs]
             Indices for the first atom in each pair.
         idx_j : torch.Tensor, shape [n_pairs]
             Indices for the second atom in each pair.
-        rcut_ij : torch.Tensor, shape [n_pairs]
-            Cutoff values for each pair.
 
         Returns
         -------
         torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
             Updated feature tensor after interaction block.
         """
-        batch_size, nr_of_atoms = x.shape[0], x.shape[1]
+        n_atoms = h.shape[0]
+        # x_minus_xt shape: (n_pairs, 3)
+        x_minus_xt = get_x_minus_xt_sparse(x, idx_i, idx_j) #TODO: implement get_x_minus_xt_sparse
+        # x_minus_xt norm shape: (n_pairs, 1)
+        x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt=x_minus_xt) #TODO: implement get_x_minus_xt_norm
+        # h_cat_ht shape: (n_pairs, hidden_features * 2 [concatenated sender and receiver]) 
+        h_cat_ht = get_h_cat_ht_sparse(h, idx_i, idx_j) #TODO: implement get_h_cat_ht_sparse
 
-        x = self.intput_to_feature(x)
-        x = x.flatten(0, 1)
+        if he is not None:
+            h_cat_ht = torch.cat([h_cat_ht, he], -1)
 
-        # Filter generation networks
-        Wij = self.filter_network(f_ij)
-        Wij = Wij * rcut_ij[:, None]
-        Wij = Wij.to(dtype=x.dtype)
+        # h_e_mtx shape: (n_pairs, hidden_features)
+        h_e_mtx = self.edge_model(h_cat_ht, x_minus_xt_norm)
+        # combined_attention shape: (n_pairs, n_heads)
+        combined_attention = self.combined_attention(x_minus_xt_norm, h_e_mtx, idx_j, n_atoms)
+        # p: pair axis; f: hidden feature axis; h: head axis
+        h_e_att = torch.einsum("pf,ph->pfh", h_e_mtx, combined_attention) 
+        h_e_att = torch.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
+        # h_e_att shape after reshape: (n_pairs,  hidden_features * n_heads)
+        h_combinations = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, idx_j, n_atoms)
 
-        # continuous-ﬁlter convolutional layers
-        x_j = x[idx_j]
-        x_ij = x_j * Wij
-        x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
-        # Update features
-        x = self.feature_to_output(x)
-        x = x.reshape(batch_size, nr_of_atoms, 128)
-        return x
+        if not self.use_spatial_attention:
+            h_combinations = torch.zeros_like(h_combinations)
+            delta_v = torch.zeros_like(delta_v)
+
+        h_e = self.aggregate(h_e_att, idx_j, n_atoms)
+        h = self.node_model(h, h_e, h_combinations)
+
+        return h
 
 
 class SakeRepresentation(nn.Module):
