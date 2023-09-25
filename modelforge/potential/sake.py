@@ -1,6 +1,5 @@
 import torch.nn as nn
-from loguru import logger
-from typing import Dict, Tuple, List, Callable
+from typing import Dict, Tuple, Callable
 
 from .models import BaseNNP
 from .utils import (
@@ -147,28 +146,22 @@ class SakeInteractionBlock(nn.Module):
         self.n_coefficients = self.n_heads * self.hidden_features
 
         self.node_mlp = nn.Sequential(
-            [
                 nn.Linear(float('nan'), self.hidden_features),
                 self.activation,
                 nn.Linear(self.hidden_features, self.out_features),
-                self.activation,
-            ]
+                self.activation
         )
 
         self.semantic_attention_mlp = nn.Sequential(
-            [
-                nn.Dense(self.n_heads),
-                nn.CELU(alpha=2.0),
-            ],
+            nn.Dense(self.n_heads),
+            nn.CELU(alpha=2.0)
         )
 
         self.post_norm_mlp = nn.Sequential(
-            [
-                nn.Linear(float('nan'), self.hidden_features),
-                self.activation,
-                nn.Linear(self,hidden_features, self.hidden_features),
-                self.activation,
-            ]
+            nn.Linear(float('nan'), self.hidden_features),
+            self.activation,
+            nn.Linear(self,hidden_features, self.hidden_features),
+            self.activation
         )
 
         self.x_mixing = nn.Sequential(
@@ -286,7 +279,6 @@ class SakeInteractionBlock(nn.Module):
 
         if not self.use_spatial_attention:
             h_combinations = torch.zeros_like(h_combinations)
-            delta_v = torch.zeros_like(delta_v)
 
         h_e = self.aggregate(h_e_att, idx_j, n_atoms)
         h = self.node_model(h, h_e, h_combinations)
