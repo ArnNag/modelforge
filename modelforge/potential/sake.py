@@ -146,10 +146,10 @@ class SakeInteractionBlock(nn.Module):
         self.n_coefficients = self.n_heads * self.hidden_features
 
         self.node_mlp = nn.Sequential(
-                nn.Linear(float('nan'), self.hidden_features),
-                self.activation,
-                nn.Linear(self.hidden_features, self.out_features),
-                self.activation
+            nn.Linear(float('nan'), self.hidden_features),
+            self.activation,
+            nn.Linear(self.hidden_features, self.out_features),
+            self.activation
         )
 
         self.semantic_attention_mlp = nn.Sequential(
