@@ -48,60 +48,44 @@ class Sake(BaseNNP):
         self.readout = EnergyReadout(n_atom_basis)
         self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=-1)
 
-    def calculate_energy(
-        self, inputs: Dict[str, torch.Tensor], cached_pairlist: bool = False
-    ) -> torch.Tensor:
+    def forward(self, inputs: Dict[str, torch.Tensor]):
         """
-        Calculate the energy for a given input batch.
+        Compute atomic representations/embeddings.
 
-        Parameters
-        ----------
-        inputs : dict, contains
-            - 'Z': torch.Tensor, shape [batch_size, n_atoms]
-                Atomic numbers for each atom in each molecule in the batch.
-            - 'R': torch.Tensor, shape [batch_size, n_atoms, 3]
-                Coordinates for each atom in each molecule in the batch.
-        cached_pairlist : bool, optional
-            Whether to use a cached pairlist. Default is False. NOTE: is this really needed?
-        Returns
-        -------
-        torch.Tensor, shape [batch_size]
-            Calculated energies for each molecule in the batch.
+        Args:
+            inputs (dict of torch.Tensor): SchNetPack dictionary of input tensors.
 
+        Returns:
+            torch.Tensor: atom-wise representation.
+            list of torch.Tensor: intermediate atom-wise representations, if
+            return_intermediate=True was used.
         """
-        # compute atom and pair features (see Fig1 in 10.1063/1.5019779)
-        # initializing x^{l}_{0} as x^l)0 = aZ_i
+        # get tensors from input dictionary
         Z = inputs["Z"]
-        x = self.embedding(Z)
         mask = Z == -1
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
 
-        x = self.representation(x, pairlist)
-        # pool average over atoms
-        return self.readout(x)
+        q = self.embedding(Z)[:, None]
+        qs = q.shape
+        mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
 
+        for i, interaction in enumerate(self.interactions):
+            q, mu = interaction(
+                q,
+                mu,
+                filter_list[i],
+                pairlist["r_ij"],
+                pairlist["d_ij"],
+                pairlist["idx_i"],
+                pairlist["idx_j"],
+                Z.shape[0],
+            )
 
-def sequential_block(in_features: int, out_features: int):
-    """
-    Create a sequential block for the neural network.
+        q = q.squeeze(1)
 
-    Parameters
-    ----------
-    in_features : int
-        Number of input features.
-    out_features : int
-        Number of output features.
-
-    Returns
-    -------
-    nn.Sequential
-        Sequential layer block.
-    """
-    return nn.Sequential(
-        nn.Linear(in_features, out_features),
-        ShiftedSoftplus(),
-        nn.Linear(out_features, out_features),
-    )
+        inputs["scalar_representation"] = q
+        inputs["vector_representation"] = mu
+        return inputs
 
 
 class SakeInteractionBlock(nn.Module):
@@ -177,16 +161,16 @@ class SakeInteractionBlock(nn.Module):
         else:
             self.log_gamma = nn.Parameter(torch.ones(self.n_heads))
 
-    def spatial_attention(self, h_e_mtx, x_minus_xt, x_minus_xt_norm, idx_j, n_atoms):
+    def spatial_attention(self, h_e_mtx, r_ij, d_ij, idx_j, n_atoms):
         # h_e_mtx shape: (n_pairs,  hidden_features * n_heads)
         # coefficients shape: (n_pairs, hidden_features * n_heads)
         coefficients = self.x_mixing(h_e_mtx)
 
-        # x_minus_xt shape: (n_pairs, 3)
-        x_minus_xt = x_minus_xt / (x_minus_xt_norm + 1e-5)
+        # d_ij shape: (n_pairs, 3)
+        r_ij = r_ij / (d_ij + 1e-5)
 
         # p: pair axis; x: position axis, c: coefficient axis
-        combinations = torch.einsum("px,pc->pcx", x_minus_xt, coefficients)
+        combinations = torch.einsum("px,pc->pcx", r_ij, coefficients)
         out_shape = (n_atoms, self.n_coefficients, 3)
         combinations_sum = torch.zeros(out_shape).scatter_reduce(0,
             idx_j,
@@ -214,11 +198,11 @@ class SakeInteractionBlock(nn.Module):
         semantic_attention = scatter_softmax(att, idx_j, dim_size=n_atoms)
         return semantic_attention
 
-    def combined_attention(self, x_minus_xt_norm, h_e_mtx, idx_j, n_atoms):
+    def combined_attention(self, d_ij, h_e_mtx, idx_j, n_atoms):
         # semantic_attention shape: (n_pairs, n_heads)
         semantic_attention = self.semantic_attention(h_e_mtx, idx_j, n_atoms)
         if self.cutoff is not None:
-            euclidean_attention = self.cutoff(x_minus_xt_norm)
+            euclidean_attention = self.cutoff(d_ij)
         else:
             euclidean_attention = 1.0
 
@@ -235,6 +219,8 @@ class SakeInteractionBlock(nn.Module):
         self,
         q: torch.Tensor,
         mu: torch.Tensor,
+        r_ij: torch.Tensor,
+        d_ij: torch.Tensor,
         idx_i: torch.Tensor,
         idx_j: torch.Tensor,
     ) -> torch.Tensor:
@@ -245,6 +231,7 @@ class SakeInteractionBlock(nn.Module):
         ----------
         q: scalar input values
         mu: vector input values
+        r_ij: displacement vectors
         idx_i : torch.Tensor, shape [n_pairs]
             Indices for the first atom in each pair.
         idx_j : torch.Tensor, shape [n_pairs]
@@ -256,25 +243,21 @@ class SakeInteractionBlock(nn.Module):
             Updated feature tensor after interaction block.
         """
         n_atoms = q.shape[0]
-        # x_minus_xt shape: (n_pairs, 3)
-        x_minus_xt = get_x_minus_xt_sparse(x, idx_i, idx_j) #TODO: implement get_x_minus_xt_sparse
-        # x_minus_xt norm shape: (n_pairs, 1)
-        x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt=x_minus_xt) #TODO: implement get_x_minus_xt_norm
         # h_cat_ht shape: (n_pairs, hidden_features * 2 [concatenated sender and receiver]) 
-        h_cat_ht = get_h_cat_ht_sparse(q, idx_i, idx_j) #TODO: implement get_h_cat_ht_sparse
+        h_cat_ht = torch.cat([q[idx_i], q[idx_j]], -1)
 
         if he is not None:
             h_cat_ht = torch.cat([h_cat_ht, he], -1)
 
         # h_e_mtx shape: (n_pairs, hidden_features)
-        h_e_mtx = self.edge_model(h_cat_ht, x_minus_xt_norm)
+        h_e_mtx = self.edge_model(h_cat_ht, )
         # combined_attention shape: (n_pairs, n_heads)
-        combined_attention = self.combined_attention(x_minus_xt_norm, h_e_mtx, idx_j, n_atoms)
+        combined_attention = self.combined_attention(d_ij, h_e_mtx, idx_j, n_atoms)
         # p: pair axis; f: hidden feature axis; h: head axis
         h_e_att = torch.einsum("pf,ph->pfh", h_e_mtx, combined_attention) 
         h_e_att = torch.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
         # h_e_att shape after reshape: (n_pairs,  hidden_features * n_heads)
-        h_combinations = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, idx_j, n_atoms)
+        h_combinations = self.spatial_attention(h_e_att, r_ij, d_ij, idx_j, n_atoms)
 
         if not self.use_spatial_attention:
             h_combinations = torch.zeros_like(h_combinations)
@@ -285,86 +268,3 @@ class SakeInteractionBlock(nn.Module):
         return q
 
 
-class SakeRepresentation(nn.Module):
-    def __init__(
-        self,
-        n_atom_basis: int,
-        n_filters: int,
-        n_interactions: int,
-    ):
-        """
-        Initialize the Sake representation layer.
-
-        Parameters
-        ----------
-        n_atom_basis : int
-            Number of atom basis.
-        n_filters : int
-            Number of filters.
-        n_interactions : int
-            Number of interaction layers.
-        """
-        super().__init__()
-
-        self.interactions = nn.ModuleList(
-            [
-                SakeInteractionBlock(n_atom_basis, n_filters)
-                for _ in range(n_interactions)
-            ]
-        )
-        self.cutoff = 5.0
-        self.radial_basis = GaussianRBF(n_rbf=20, cutoff=self.cutoff)
-
-    def _distance_to_radial_basis(
-        self, d_ij: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Convert distances to radial basis functions.
-
-        Parameters
-        ----------
-        d_ij : torch.Tensor, shape [n_pairs]
-            Pairwise distances between atoms.
-
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            - Radial basis functions, shape [n_pairs, n_rbf]
-            - cutoff values, shape [n_pairs]
-        """
-        f_ij = self.radial_basis(d_ij)
-        rcut_ij = cosine_cutoff(d_ij, self.cutoff)
-        return f_ij, rcut_ij
-
-    def forward(
-        self, x: torch.Tensor, pairlist: Dict[str, torch.Tensor]
-    ) -> torch.Tensor:
-        """
-        Forward pass for the representation layer.
-
-        Parameters
-        ----------
-        x : torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
-            Input feature tensor for atoms.
-        pairlist: Dict[str, torch.Tensor]
-            Pairlist dictionary containing the following keys:
-            - 'atom_index12': torch.Tensor, shape [n_pairs, 2]
-                Atom indices for pairs of atoms
-            - 'd_ij': torch.Tensor, shape [n_pairs]
-                Pairwise distances between atoms.
-        Returns
-        -------
-        torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
-            Output tensor after forward pass.
-        """
-        atom_index12 = pairlist["atom_index12"]
-        d_ij = pairlist["d_ij"]
-
-        f_ij, rcut_ij = self._distance_to_radial_basis(d_ij)
-
-        idx_i, idx_j = atom_index12[0], atom_index12[1]
-        for interaction in self.interactions:
-            v = interaction(x, f_ij, idx_i, idx_j, rcut_ij)
-            x = x + v
-
-        return x
