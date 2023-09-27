@@ -43,7 +43,6 @@ class Sake(BaseNNP):
         self.n_filters = n_filters
         self.calculate_distances_and_pairlist = PairList(cutoff)
 
-        self.embedding = nn.Embedding(100, n_atom_basis, padding_idx=-1)
         self.readout = EnergyReadout(n_atom_basis)
 
         self.interaction = SakeInteractionBlock(
@@ -77,7 +76,7 @@ class Sake(BaseNNP):
         mask = Z == -1
         pairlist = self.calculate_distances_and_pairlist(mask, inputs["R"])
 
-        q = self.embedding(Z)[:, None]
+        q = nn.functional.one_hot(Z, self.n_atom_basis)
         qs = q.shape
         mu = torch.zeros((qs[0], 3, qs[2]), device=q.device)
 
