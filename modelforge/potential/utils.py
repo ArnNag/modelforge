@@ -119,8 +119,11 @@ def scatter_softmax(
                          'with floating point data types.')
 
     out_shape = [
-        other_dim_size for (other_dim, other_dim_size) in enumerate(x.shape)
-        if other_dim != dim else dim_size
+        other_dim_size
+        if (other_dim != dim)
+        else dim_size
+        for (other_dim, other_dim_size)
+        in enumerate(x.shape)
     ]
     max_value_per_index = torch.zeros(out_shape).scatter_reduce(dim, index, src, "amax", include_self=False)
     max_per_src_element = max_value_per_index.gather(dim, index)

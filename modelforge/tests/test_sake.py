@@ -31,7 +31,7 @@ def test_calculate_energies_and_forces():
     # trained model. Here we want to test the
     # energy and force calculatino on Methane
 
-    sake = Sake(128, 6, 64)
+    sake = Sake(n_atom_basis=31, n_interactions=3, n_filters=127, n_rbf=63)
     methane_inputs = generate_methane_input()
     result = sake(methane_inputs)
     forces = -torch.autograd.grad(

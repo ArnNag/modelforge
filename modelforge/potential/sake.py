@@ -45,10 +45,19 @@ class Sake(BaseNNP):
         self.n_interactions = n_interactions
         self.calculate_distances_and_pairlist = PairList(cutoff)
 
-        self.readout = EnergyReadout(n_atom_basis)
+        self.readout = EnergyReadout(n_filters)
+
+        self.first_interaction = SakeInteractionBlock(
+            in_features=n_atom_basis,
+            out_features=n_filters,
+            hidden_features=n_filters,
+            n_rbf=n_rbf,
+            update=update,
+            cutoff=cutoff
+        )
 
         self.interaction = SakeInteractionBlock(
-            n_atom_basis=self.n_atom_basis,
+            in_features=n_filters,
             out_features=n_filters,
             hidden_features=n_filters,
             n_rbf=n_rbf,
@@ -79,6 +88,15 @@ class Sake(BaseNNP):
 
         idx_i, idx_j = pairlist["atom_index12"]
 
+        q = self.first_interaction(
+            q,
+            mu,
+            pairlist["r_ij"],
+            pairlist["d_ij"],
+            idx_i,
+            idx_j
+        )
+
         for i in range(self.n_interactions):
             q = self.interaction(
                 q,
@@ -97,7 +115,7 @@ class Sake(BaseNNP):
 class SakeInteractionBlock(nn.Module):
     def __init__(
             self,
-            n_atom_basis: int,
+            in_features: int,
             out_features: int,
             hidden_features: int,
             n_rbf: int = 50,
@@ -114,12 +132,12 @@ class SakeInteractionBlock(nn.Module):
 
         Parameters
         ----------
-        n_atom_basis : int
+        out_features : int
             Number of atom basis, defines the dimensionality of the output features.
 
         """
         super().__init__()
-        self.n_atom_basis = n_atom_basis
+        self.in_features = in_features
         self.out_features = out_features
         self.hidden_features = hidden_features
         self.activation = activation
@@ -129,7 +147,7 @@ class SakeInteractionBlock(nn.Module):
         self.use_euclidean_attention = use_euclidean_attention
         self.use_spatial_attention = use_spatial_attention
         self.cutoff = cutoff
-        self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.hidden_features, self.out_features, n_rbf)
+        self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.in_features, self.hidden_features, n_rbf)
         self.n_coefficients = self.n_heads * self.hidden_features
 
         self.node_mlp = nn.Sequential(
@@ -230,8 +248,10 @@ class SakeInteractionBlock(nn.Module):
 
         Parameters
         ----------
-        q: scalar input values
-        mu: vector input values
+        q: torch.Tensor, shape [n_atoms, ?, in_features]
+            scalar input values
+        mu: torch.Tensor, shape [n_atoms, 3, in_features]
+        vector input values
         r_ij: torch.Tensor, shape [n_pairs, 3]
             Displacement vectors
         d_ij: torch.Tensor, shape [n_pairs]
@@ -248,6 +268,11 @@ class SakeInteractionBlock(nn.Module):
         """
         n_atoms = q.shape[0]
         # qi_cat_qj shape: (n_pairs, hidden_features * 2 [concatenated sender and receiver]) 
+        print("mu.shape", mu.shape)
+        print("q.shape", q.shape)
+        print("idx_i", idx_i)
+        print("idx_j", idx_j)
+        # qi_cat_qj shape: (n_pairs, in_features)
         qi_cat_qj = torch.cat([q[idx_i], q[idx_j]], -1)
 
         # q_ij_mtx shape: (n_pairs, hidden_features)
