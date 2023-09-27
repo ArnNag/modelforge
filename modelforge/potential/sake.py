@@ -233,8 +233,8 @@ class SakeInteractionBlock(nn.Module):
 
     def forward(
         self,
-        h: torch.Tensor,
-        x: torch.Tensor,
+        q: torch.Tensor,
+        mu: torch.Tensor,
         idx_i: torch.Tensor,
         idx_j: torch.Tensor,
     ) -> torch.Tensor:
@@ -243,9 +243,8 @@ class SakeInteractionBlock(nn.Module):
 
         Parameters
         ----------
-        x : torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
-            Input feature tensor for atoms.
-            Radial basis functions for pairs of atoms.
+        q: scalar input values
+        mu: vector input values
         idx_i : torch.Tensor, shape [n_pairs]
             Indices for the first atom in each pair.
         idx_j : torch.Tensor, shape [n_pairs]
@@ -256,13 +255,13 @@ class SakeInteractionBlock(nn.Module):
         torch.Tensor, shape [batch_size, n_atoms, n_atom_basis]
             Updated feature tensor after interaction block.
         """
-        n_atoms = h.shape[0]
+        n_atoms = q.shape[0]
         # x_minus_xt shape: (n_pairs, 3)
         x_minus_xt = get_x_minus_xt_sparse(x, idx_i, idx_j) #TODO: implement get_x_minus_xt_sparse
         # x_minus_xt norm shape: (n_pairs, 1)
         x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt=x_minus_xt) #TODO: implement get_x_minus_xt_norm
         # h_cat_ht shape: (n_pairs, hidden_features * 2 [concatenated sender and receiver]) 
-        h_cat_ht = get_h_cat_ht_sparse(h, idx_i, idx_j) #TODO: implement get_h_cat_ht_sparse
+        h_cat_ht = get_h_cat_ht_sparse(q, idx_i, idx_j) #TODO: implement get_h_cat_ht_sparse
 
         if he is not None:
             h_cat_ht = torch.cat([h_cat_ht, he], -1)
@@ -281,9 +280,9 @@ class SakeInteractionBlock(nn.Module):
             h_combinations = torch.zeros_like(h_combinations)
 
         h_e = self.aggregate(h_e_att, idx_j, n_atoms)
-        h = self.node_model(h, h_e, h_combinations)
+        q = self.node_model(h, h_e, h_combinations)
 
-        return h
+        return q
 
 
 class SakeRepresentation(nn.Module):
