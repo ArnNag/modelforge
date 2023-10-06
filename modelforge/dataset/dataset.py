@@ -10,8 +10,8 @@ from torch.utils.data import DataLoader
 
 from modelforge.utils.prop import PropertyNames
 
-from .transformation import default_transformation
-from .utils import RandomSplittingStrategy, SplittingStrategy
+from modelforge.dataset.transformation import default_transformation
+from modelforge.dataset.utils import RandomSplittingStrategy, SplittingStrategy
 
 
 class TorchDataset(torch.utils.data.Dataset):
@@ -32,17 +32,19 @@ class TorchDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        dataset: np.ndarray,
+        dataset: np.lib.npyio.NpzFile,
         property_name: PropertyNames,
         preloaded: bool = False,
     ):
+
         self.properties_of_interest = {
             "Z": dataset[property_name.Z],
             "R": dataset[property_name.R],
             "E": dataset[property_name.E],
+            "mol_start_idxs": np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
         }
 
-        self.length = len(self.properties_of_interest["Z"])
+        self.length = len(self.properties_of_interest["mol_start_idxs"]) - 1
         self.preloaded = preloaded
 
     def __len__(self) -> int:
@@ -77,9 +79,11 @@ class TorchDataset(torch.utils.data.Dataset):
             - 'idx': int
                 Index of the molecule in the dataset.
         """
-        Z = torch.tensor(self.properties_of_interest["Z"][idx], dtype=torch.int64)
-        R = torch.tensor(self.properties_of_interest["R"][idx], dtype=torch.float32)
-        E = torch.tensor(self.properties_of_interest["E"][idx], dtype=torch.float32)
+        start_idx = self.properties_of_interest["mol_start_idxs"][idx]
+        end_idx = self.properties_of_interest["mol_start_idxs"][idx + 1]
+        Z = torch.tensor(self.properties_of_interest["Z"][start_idx:end_idx], dtype=torch.int64)
+        R = torch.tensor(self.properties_of_interest["R"][start_idx:end_idx], dtype=torch.float32)
+        E = torch.tensor(self.properties_of_interest["E"][start_idx:end_idx], dtype=torch.float32)
         return {"Z": Z, "R": R, "E": E, "idx": idx}
 
 
@@ -143,7 +147,12 @@ class HDF5Dataset:
                         for value in self.properties_of_interest:
                             data[value].append(hf[mol][value][()])
 
-        self.hdf5data = data
+        self.hdf5data = OrderedDict()
+        for value in self.properties_of_interest:
+            concat_axis = None if data[value][0].ndim == 0 else 0
+            self.hdf5data[value] = np.concatenate(data[value], axis=concat_axis)
+        self.hdf5data["n_atoms"] = np.array([len(mol) for mol in data[self.properties_of_interest[0]]]) #TODO: fix hardcoding
+
 
     def _from_file_cache(self) -> Dict[str, List]:
         """
@@ -265,7 +274,7 @@ class DatasetFactory:
     def create_dataset(
         data: HDF5Dataset,
         label_transform: Optional[Dict[str, Callable]] = None,
-        transform: Optional[Dict[str, Callable]] = default_transformation,
+        transform: Optional[Dict[str, Callable]] = None,
     ) -> TorchDataset:
         """
         Creates a Dataset instance given an HDF5Dataset.
