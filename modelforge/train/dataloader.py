@@ -1,21 +1,22 @@
 from modelforge.dataset.dataset import TorchDataset
 import torch
 from torch.utils.data import DataLoader, Sampler
-from typing import Union, Iterable
-from collections.abc import Iterator
+from typing import Union, Iterable, Optional, List, Dict
+from collections.abc import Generator
 
 
 
 def get_batch_loader(
         dataset: TorchDataset, 
-        sampler: Union[Sampler, Iterable], 
         cutoff: float,
-        max_batch_edges: int) -> DataLoader:
+        max_batch_edges: int,
+        sampler: Optional[Union[Sampler, Iterable]] = None
+    ) -> DataLoader:
     """Return a DataLoader object for the given dataset with molecules in the order specified by sampler. First, computes the number of edges within a Euclidean cutoff and groups the molecules into batches such that the total number of edges in the batch is less than max_batch_edges. Each iteration of the returned DataLoader yields a dictionary with the concatenated Z, R, and E tensors for the batch, as well a list of the indices of the molecules in the dataset and a list of the number of atoms in each molecule. """
     one_molecule_loader = DataLoader(dataset, sampler=sampler)
-    batch_sampler = BatchSampler(one_molecule_loader, cutoff, max_batch_edges)
+    batch_sampler = get_batch_sampler(one_molecule_loader, cutoff, max_batch_edges)
 
-    def collate_molecules(molecule_list):
+    def collate_molecules(molecule_list: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
         #TODO: violates abstraction barrier. Define a class for TorchDataset.__get__item__() output with a collate method instead of using a dictionary?
         """Concatenate the Z, R, and E tensors from a list of molecules into a single tensor each, and return a new dictionary with the concatenated tensors."""
         Z_list = []
@@ -37,37 +38,27 @@ def get_batch_loader(
     return DataLoader(dataset, batch_sampler=batch_sampler, collate_fn=collate_molecules)
     
 
-class BatchSampler(Iterator):
-    def __init__(self,
-            one_molecule_loader: DataLoader,
-            cutoff: float,
-            max_batch_edges: int):
-        """Return a BatchSampler object for a DataLoader that yields one molecule at a time. The BatchSampler yields a list of indices of molecules in the DataLoader such that the total number of edges in the batch is less than max_batch_edges."""
-        super().__init__()
-        self.one_molecule_iter = iter(one_molecule_loader)
-        self.cutoff = cutoff
-        self.max_batch_edges = max_batch_edges
+def get_batch_sampler(
+    one_molecule_loader: DataLoader,
+    cutoff: float,
+    max_batch_edges: int
+    ) -> Generator[List[int], None, None]:
+    """Return a generator for a DataLoader that yields one molecule at a time. The generator yields a list of indices of molecules in the DataLoader such that the total number of edges in the batch is less than max_batch_edges."""
 
-    def get_num_edges_within_cutoff(self, molecule):
+    def get_num_edges_within_cutoff(molecule, cutoff):
         """Return the number of edges within the cutoff for the given molecule."""
-        #TODO: reimplement modelforge.poential.utils.neighbor_pairs_nopbc. Should not have mask in function signature.
-        return len(molecule['X']) ** 2
+        #TODO: reimplement modelforge.potential.utils.neighbor_pairs_nopbc. Should not have mask in function signature.
+        return len(molecule['Z']) ** 2
 
 
-    def __next__(self):
-        added_idxs = []
-        added_edges = 0
-        while True:
-            molecule = next(self.one_molecule_iter)
-            num_molecule_edges = self.get_num_edges_within_cutoff(molecule)
-            added_idxs.append(molecule['idx'])
-            if added_edges + num_molecule_edges > self.max_batch_edges:
-                yield added_idxs
-                added_idxs = [molecule['idx']]
-                added_edges = num_molecule_edges
-            else:
-                added_idxs.append(molecule['idx'])
-                added_edges += num_molecule_edges
+    added_idxs = []
+    added_edges = 0
+    for molecule in one_molecule_loader:
+        num_molecule_edges = get_num_edges_within_cutoff(molecule, cutoff)
+        if added_edges + num_molecule_edges > max_batch_edges:
+            yield added_idxs
+            added_idxs = []
+            added_edges = 0
+        added_idxs.append(molecule['idx'].item())
+        added_edges += num_molecule_edges
 
-    def __len__(self):
-        return 0 #TODO: implement
