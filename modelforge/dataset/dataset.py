@@ -1,6 +1,5 @@
 import os
-import shutil
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
 import pytorch_lightning as pl
@@ -101,11 +100,14 @@ class HDF5Dataset:
         Path to the processed data file.
     """
 
-    def __init__(self, raw_data_file: str, processed_data_file: str):
+    def __init__(
+        self, raw_data_file: str, processed_data_file: str, local_cache_dir: str
+    ):
         self.raw_data_file = raw_data_file
         self.processed_data_file = processed_data_file
         self.hdf5data: Optional[Dict[str, List]] = None
         self.numpy_data: Optional[np.ndarray] = None
+        self.local_cache_dir = local_cache_dir
 
     def _from_hdf5(self) -> None:
         """
@@ -135,17 +137,66 @@ class HDF5Dataset:
         for value in self.properties_of_interest:
             data[value] = []
 
+        # molecule_id will contain an integer that is unique to molecules
+        # i.e., conformers of the same molecule will have the same id.
+        data["molecule_id"] = []
         logger.debug(f"Processing and extracting data from {self.raw_data_file}")
+
         # this will create an unzipped file which we can then load in
         # this is substantially faster than passing gz_file directly to h5py.File()
+        # by avoiding data chunking issues.
+
+        temp_hdf5_file = f"{self.local_cache_dir}/temp_unzipped.hdf5"
         with gzip.open(self.raw_data_file, "rb") as gz_file:
-            with open(self.raw_data_file.replace(".gz", ""), "wb") as out_file:
+            with open(temp_hdf5_file, "wb") as out_file:
                 shutil.copyfileobj(gz_file, out_file)
-                with h5py.File(self.raw_data_file.replace(".gz", ""), "r") as hf:
-                    logger.debug(f"n_entries: {len(hf.keys())}")
-                    for mol in tqdm.tqdm(list(hf.keys())):
+
+        with h5py.File(temp_hdf5_file, "r") as hf:
+            logger.debug(f"n_entries: {len(hf.keys())}")
+            molecule_id = 0
+            for mol in tqdm.tqdm(list(hf.keys())):
+                n_configs = hf[mol]["n_configs"][()]
+                temp_data = {}
+                is_series = {}
+
+                # There may be cases where a specific property of interest
+                # has not been computed for a given molecule
+                # in that case, we'll want to just skip over that entry
+                property_found = True
+                property_keys = list(hf[mol].keys())
+                for value in self.properties_of_interest:
+                    if not value in property_keys:
+                        property_found = False
+
+                if property_found:
+                    for value in self.properties_of_interest:
+                        # First grab all the data of interest;
+                        # indexing into a local np array is much faster
+                        # than indexing into the array in the hdf5 file
+                        temp_data[value] = hf[mol][value][()]
+                        is_series[value] = hf[mol][value].attrs["format"].split("_")[0]
+
+                    for n in range(n_configs):
+                        not_nan = True
+                        temp_data_cut = {}
                         for value in self.properties_of_interest:
-                            data[value].append(hf[mol][value][()])
+                            if is_series[value] == "series":
+                                temp_data_cut[value] = temp_data[value][n]
+                                if np.any(np.isnan(temp_data_cut[value])):
+                                    not_nan = False
+                                    break
+                            else:
+                                temp_data_cut[value] = temp_data[value]
+                                if np.any(np.isnan(temp_data_cut[value])):
+                                    not_nan = False
+                                    break
+                        if not_nan:
+                            for value in self.properties_of_interest:
+                                data[value].append(temp_data_cut[value])
+                            # keep track of the name of the molecule and configuration number
+                            # may be needed for splitting
+                            data["molecule_id"].append(molecule_id)
+                    molecule_id += 1
 
         self.hdf5data = OrderedDict()
         for value in self.properties_of_interest:
@@ -324,13 +375,22 @@ class TorchDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data: HDF5Dataset,
-        SplittingStrategy: SplittingStrategy = RandomSplittingStrategy,
+        split: SplittingStrategy = RandomSplittingStrategy(),
         batch_size: int = 64,
+        split_file: Optional[str] = None,
     ):
         super().__init__()
         self.data = data
         self.batch_size = batch_size
-        self.SplittingStrategy = SplittingStrategy
+        self.split_idxs: Optional[str] = None
+        if split_file:
+            import numpy as np
+
+            logger.debug(f"Loading split indices from {split_file}")
+            self.split_idxs = np.load(split_file)
+        else:
+            logger.debug(f"Using splitting strategy {split}")
+            self.split = split
 
     def prepare_data(self) -> None:
         """
@@ -349,15 +409,29 @@ class TorchDataModule(pl.LightningDataModule):
         stage : str
             Either "fit" for training/validation split or "test" for test split.
         """
+        from torch.utils.data import Subset
+
         if stage == "fit":
-            train_dataset, val_dataset, _ = self.SplittingStrategy().split(self.dataset)
-            self.train_dataset = train_dataset
-            self.val_dataset = val_dataset
+            if self.split_idxs:
+                train_idx, val_idx = (
+                    self.split_idxs["train_idx"],
+                    self.split_idxs["val_idx"],
+                )
+                self.train_dataset = Subset(self.dataset, train_idx)
+                self.val_dataset = Subset(self.dataset, val_idx)
+            else:
+                train_dataset, val_dataset, _ = self.split.split(self.dataset)
+                self.train_dataset = train_dataset
+                self.val_dataset = val_dataset
 
         # Assign test dataset for use in dataloader(s)
         if stage == "test":
-            _, _, test_dataset = self.SplittingStrategy().split(self.dataset)
-            self.test_dataset = test_dataset
+            if self.split_idxs:
+                test_idx = self.split_idxs["test_idx"]
+                self.test_dataset = Subset(self.dataset, test_idx)
+            else:
+                _, _, test_dataset = self.SplittingStrategy().split(self.dataset)
+                self.test_dataset = test_dataset
 
     def train_dataloader(self) -> DataLoader:
         """

@@ -9,7 +9,7 @@ dependencies:
   - requests
   - tqdm
   - qcelemental=0.25.1
-  - qcportal
+  - qcportal>=0.50
   - pytorch
   - loguru
   - gdown
@@ -19,6 +19,10 @@ dependencies:
   - torchvision
   - openff-units
   - pint
+  - pedantic
+  - rdkit
+  - retry
+  - sqlitedict
 
   # Testing
   - pytest
@@ -27,6 +31,3 @@ dependencies:
   - qcelemental=0.25.1
   - qcportal
   - requests
-
-  - pip:
-      - pedantic

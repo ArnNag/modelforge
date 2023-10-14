@@ -10,7 +10,7 @@ from loguru import logger
 from torch.utils.data import Subset, random_split
 
 if TYPE_CHECKING:
-    from .dataset import TorchDataset
+    from modelforge.dataset.dataset import TorchDataset
 
 
 class SplittingStrategy(ABC):
@@ -121,6 +121,41 @@ class RandomSplittingStrategy(SplittingStrategy):
             dataset,
             lengths=[self.train_size, self.val_size, self.test_size],
             generator=self.generator,
+        )
+
+        return (train_d, val_d, test_d)
+
+
+class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
+    """
+    Strategy to split a dataset based on idx.
+
+    Examples
+    --------
+    >>> dataset = [1, 2, 3, 4, 5]
+    >>> strategy = FirstComeFirstServeSplittingStrategy()
+    >>> train_idx, val_idx, test_idx = strategy.split(dataset)
+    """
+
+    def __init__(self, split: List[float] = [0.8, 0.1, 0.1]):
+        super().__init__(42)
+        self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
+        assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
+
+    def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
+        logger.debug(f"Using first come/first serve splitting strategy ...")
+        logger.debug(
+            f"Splitting dataset into {self.train_size}, {self.val_size}, {self.test_size} ..."
+        )
+
+        len_dataset = len(dataset)
+        first_split_on = int(len_dataset * self.train_size)
+        second_split_on = int(len_dataset * self.val_size)
+        indices = np.arange(len_dataset, dtype=int)
+        train_d, val_d, test_d = (
+            Subset(dataset, indices[0:first_split_on]),
+            Subset(dataset, indices[first_split_on:second_split_on]),
+            Subset(dataset, indices[second_split_on:]),
         )
 
         return (train_d, val_d, test_d)
