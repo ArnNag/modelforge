@@ -1,5 +1,6 @@
 import os
 from typing import Callable, Dict, List, Optional
+from collections import OrderedDict
 
 import numpy as np
 import pytorch_lightning as pl
@@ -9,7 +10,6 @@ from torch.utils.data import DataLoader
 
 from modelforge.utils.prop import PropertyNames
 
-from modelforge.dataset.transformation import default_transformation
 from modelforge.dataset.utils import RandomSplittingStrategy, SplittingStrategy
 
 
@@ -19,7 +19,7 @@ class TorchDataset(torch.utils.data.Dataset):
 
     Parameters
     ----------
-    dataset : np.ndarray
+    dataset : np.lib.npyio.NpzFile
         The underlying numpy dataset.
     property_name : PropertyNames
         Property names to extract from the dataset.
@@ -40,10 +40,10 @@ class TorchDataset(torch.utils.data.Dataset):
             "Z": dataset[property_name.Z],
             "R": dataset[property_name.R],
             "E": dataset[property_name.E],
-            "conf_start_idxs": np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
         }
 
-        self.length = len(self.properties_of_interest["conf_start_idxs"]) - 1
+        self.conf_start_idxs = np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
+        self.length = len(dataset["n_atoms"])
         self.preloaded = preloaded
 
     def __len__(self) -> int:
@@ -59,7 +59,7 @@ class TorchDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
-        Fetch a tuple of the values for the properties of interest for a given molecule index.
+        Fetch a tuple of the values for the properties of interest for a given conformer index.
 
         Parameters
         ----------
@@ -78,11 +78,12 @@ class TorchDataset(torch.utils.data.Dataset):
             - 'idx': int
                 Index of the conformer in the dataset.
         """
-        start_idx = self.properties_of_interest["conf_start_idxs"][idx]
-        end_idx = self.properties_of_interest["conf_start_idxs"][idx + 1]
+        start_idx = self.conf_start_idxs[idx]
+        end_idx = self.conf_start_idxs[idx + 1]
         Z = torch.tensor(self.properties_of_interest["Z"][start_idx:end_idx], dtype=torch.int64)
         R = torch.tensor(self.properties_of_interest["R"][start_idx:end_idx], dtype=torch.float32)
         E = torch.tensor(self.properties_of_interest["E"][start_idx:end_idx], dtype=torch.float32)
+
         return {"Z": Z, "R": R, "E": E, "idx": idx}
 
 
@@ -105,18 +106,13 @@ class HDF5Dataset:
     ):
         self.raw_data_file = raw_data_file
         self.processed_data_file = processed_data_file
-        self.hdf5data: Optional[Dict[str, List]] = None
+        self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
         self.local_cache_dir = local_cache_dir
 
     def _from_hdf5(self) -> None:
         """
         Processes and extracts data from an hdf5 file.
-
-        Returns
-        -------
-        OrderedDict[str, List]
-            Processed data from the hdf5 file.
 
         Examples
         --------
@@ -125,7 +121,6 @@ class HDF5Dataset:
 
         """
         import gzip
-        from collections import OrderedDict
 
         import h5py
         import tqdm
@@ -140,6 +135,7 @@ class HDF5Dataset:
         # molecule_id will contain an integer that is unique to molecules
         # i.e., conformers of the same molecule will have the same id.
         data["molecule_id"] = []
+        self.formats = {"molecule_id": "single_rec"}
         logger.debug(f"Processing and extracting data from {self.raw_data_file}")
 
         # this will create an unzipped file which we can then load in
@@ -152,12 +148,15 @@ class HDF5Dataset:
                 shutil.copyfileobj(gz_file, out_file)
 
         with h5py.File(temp_hdf5_file, "r") as hf:
+
+            for value in self.properties_of_interest:
+                self.formats[value] = hf[next(iter(hf.keys()))][value].attrs["format"]
+
             logger.debug(f"n_entries: {len(hf.keys())}")
             molecule_id = 0
             for mol in tqdm.tqdm(list(hf.keys())):
                 n_configs = hf[mol]["n_configs"][()]
                 temp_data = {}
-                is_series = {}
 
                 # There may be cases where a specific property of interest
                 # has not been computed for a given molecule
@@ -174,13 +173,15 @@ class HDF5Dataset:
                         # indexing into a local np array is much faster
                         # than indexing into the array in the hdf5 file
                         temp_data[value] = hf[mol][value][()]
-                        is_series[value] = hf[mol][value].attrs["format"].split("_")[0]
 
                     for n in range(n_configs):
                         not_nan = True
                         temp_data_cut = {}
                         for value in self.properties_of_interest:
-                            if is_series[value] == "series":
+                            dim_format = self.formats[value]
+                            if dim_format != hf[mol][value].attrs["format"]:
+                                raise ValueError("Format mismatch across molecules for value {value}")
+                            if dim_format == "series_atom" or dim_format == "series_mol":
                                 temp_data_cut[value] = temp_data[value][n]
                                 if np.any(np.isnan(temp_data_cut[value])):
                                     not_nan = False
@@ -205,14 +206,9 @@ class HDF5Dataset:
         self.hdf5data["n_atoms"] = np.array([len(mol) for mol in data[self.properties_of_interest[0]]]) #TODO: fix hardcoding
 
 
-    def _from_file_cache(self) -> Dict[str, List]:
+    def _from_file_cache(self) -> None:
         """
         Loads the processed data from cache.
-
-        Returns
-        -------
-        OrderedDict[str, List]
-            Processed data from the cache file.
 
         Examples
         --------
@@ -249,15 +245,11 @@ class HDF5Dataset:
         Save processed data to a numpy (.npz) file.
         Parameters
         ----------
-        data : OrderedDict[str, List[np.ndarray]]
-            Dictionary containing processed data to be saved.
-        processed_dataset_file : str
-            Path to save the processed dataset.
         label_transform : Optional[Dict[str, Callable]], optional
             transformations to apply to the labels
         transforms : Dict[str, Callable], default=default_transformation
             transformations to apply to the data
-
+)
         Examples
         --------
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
@@ -270,9 +262,24 @@ class HDF5Dataset:
 
         logger.debug(f"Writing data cache to {self.processed_data_file}")
 
+        data_arrays = OrderedDict()
+        n_atoms_by_property = OrderedDict()
+        for value in self.properties_of_interest:
+            dim_format = self.formats[value]
+            if dim_format == "series_atom" or dim_format == "single_atom":
+                data_arrays[value] = np.concatenate(self.hdf5data[value], axis=0)
+                n_atoms_by_property[value] = np.array([len(mol) for mol in self.hdf5data[value]])
+            else:
+                data_arrays[value] = np.array(self.hdf5data[value])
+
+        n_atoms = next(iter(n_atoms_by_property.values()))
+        if not all(np.array_equal(n_atoms_other, n_atoms) for n_atoms_other in n_atoms_by_property.values()):
+            raise ValueError("Number of atoms per conformer not consistent across properties: {n_atoms_by_property}")
+
         np.savez(
             self.processed_data_file,
-            **self.hdf5data,
+            n_atoms,
+            **data_arrays
         )
         del self.hdf5data
 
@@ -306,7 +313,7 @@ class DatasetFactory:
 
         Parameters
         ----------
-        dataset : HDF5Dataset
+        data : HDF5Dataset
             The HDF5 dataset instance to use.
         """
 
