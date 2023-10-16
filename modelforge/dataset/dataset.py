@@ -40,10 +40,10 @@ class TorchDataset(torch.utils.data.Dataset):
             "Z": dataset[property_name.Z],
             "R": dataset[property_name.R],
             "E": dataset[property_name.E],
-            "mol_start_idxs": np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
+            "conf_start_idxs": np.concatenate([[0], np.cumsum(dataset["n_atoms"])])
         }
 
-        self.length = len(self.properties_of_interest["mol_start_idxs"]) - 1
+        self.length = len(self.properties_of_interest["conf_start_idxs"]) - 1
         self.preloaded = preloaded
 
     def __len__(self) -> int:
@@ -78,8 +78,8 @@ class TorchDataset(torch.utils.data.Dataset):
             - 'idx': int
                 Index of the conformer in the dataset.
         """
-        start_idx = self.properties_of_interest["mol_start_idxs"][idx]
-        end_idx = self.properties_of_interest["mol_start_idxs"][idx + 1]
+        start_idx = self.properties_of_interest["conf_start_idxs"][idx]
+        end_idx = self.properties_of_interest["conf_start_idxs"][idx + 1]
         Z = torch.tensor(self.properties_of_interest["Z"][start_idx:end_idx], dtype=torch.int64)
         R = torch.tensor(self.properties_of_interest["R"][start_idx:end_idx], dtype=torch.float32)
         E = torch.tensor(self.properties_of_interest["E"][start_idx:end_idx], dtype=torch.float32)
