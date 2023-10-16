@@ -64,19 +64,19 @@ class TorchDataset(torch.utils.data.Dataset):
         Parameters
         ----------
         idx : int
-            Index of the molecule to fetch data for.
+            Index of the conformer to fetch data for.
 
         Returns
         -------
         dict, contains:
             - 'Z': torch.Tensor, shape [n_atoms]
-                Atomic numbers for each atom in the molecule.
+                Atomic numbers for each atom in the conformer.
             - 'R': torch.Tensor, shape [n_atoms, 3]
-                Coordinates for each atom in the molecule.
+                Coordinates for each atom in the conformer.
             - 'E': torch.Tensor, shape []
-                Scalar energy value for the molecule.
+                Scalar energy value for the conformer.
             - 'idx': int
-                Index of the molecule in the dataset.
+                Index of the conformer in the dataset.
         """
         start_idx = self.properties_of_interest["mol_start_idxs"][idx]
         end_idx = self.properties_of_interest["mol_start_idxs"][idx + 1]
