@@ -153,7 +153,6 @@ def cosine_cutoff(d_ij: torch.Tensor, cutoff: float) -> torch.Tensor:
     input_cut = input_cut * (d_ij < cutoff)
     return input_cut
 
-
 class EnergyReadout(nn.Module):
     """
     Defines the energy readout module.
@@ -192,14 +191,13 @@ class EnergyReadout(nn.Module):
         Tensor, shape [nr_of_moleculs_in_batch, 1]
             The total energy tensor.
         """
-        import torch_scatter
 
         x = self.energy_layer(x)
 
         # Perform scatter add operation
-        result = torch_scatter.scatter_add(
-            x.t(), atomic_subsystem_indices.to(torch.int64), dim=1
-        ).t()
+
+        indices = atomic_subsystem_indices.to(torch.int64).unsqueeze(1)
+        result = torch.zeros(len(atomic_subsystem_indices.unique()), 1).scatter_add(0, indices, x)
 
         # Sum across feature dimension to get final tensor of shape (num_molecules, 1)
         total_energy_per_molecule = result.sum(dim=1, keepdim=True)
@@ -328,7 +326,6 @@ def neighbor_pairs_nopbc(
     # generate index grid
     n = len(atomic_subsystem_indices)
     i_indices, j_indices = torch.triu_indices(n, n, 1)
-    print(atomic_subsystem_indices[i_indices])
     # filter pairs to only keep those belonging to the same molecule
     same_molecule_mask = (
         atomic_subsystem_indices[i_indices] == atomic_subsystem_indices[j_indices]
