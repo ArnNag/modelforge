@@ -164,36 +164,41 @@ class EnergyReadout(nn.Module):
         Forward pass for the energy readout.
     """
 
-    def __init__(self, n_atom_basis: int):
+    def __init__(self, n_filters: int):
         """
         Initialize the EnergyReadout class.
 
         Parameters
         ----------
-        n_atom_basis : int
-            Number of atom basis.
+        n_filters : int
+            Number of filters after the last message passing layer.
         """
         super().__init__()
-        self.energy_layer = nn.Linear(n_atom_basis, 1)
+        self.energy_layer = nn.Linear(n_filters, 1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, atomic_subsystem_index: List[int]) -> torch.Tensor:
         """
         Forward pass for the energy readout.
 
         Parameters
         ----------
-        x : Tensor, shape [batch, n_atoms, n_atom_basis]
+        x : Tensor, shape [n_atoms, n_filters]
             Input tensor for the forward pass.
+        atomic_subsystem_index : List[int], length [n_systems]
+            Number of atoms in each subsystem.
 
         Returns
         -------
-        Tensor, shape [batch, 1]
+        Tensor, shape [n_systems, 1]
             The total energy tensor.
         """
         x = self.energy_layer(
             x
-        )  # in [batch, n_atoms, n_atom_basis], out [batch, n_atoms, 1]
-        total_energy = x.sum(dim=1)  # in [batch, n_atoms, 1], out [batch, 1]
+        )  # in [n_atoms, n_atom_basis], out [n_atoms, 1]
+        atomic_subsystem_index = torch.repeat_interleave(torch.arange(len(atomic_subsystem_counts)), atomic_subsystem_counts).unsqueeze(-1)
+        print("atomic_subsystem_counts", atomic_subsystem_counts)
+        total_energy = torch.zeros(len(atomic_subsystem_counts), 1).scatter_add(0, atomic_subsystem_index, x) # in [batch, n_atoms, 1], out [batch, 1]
+
         return total_energy
 
 
