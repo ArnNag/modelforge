@@ -12,12 +12,12 @@ from .utils import (
 import torch
 
 
-class Sake(BaseNNP):
+class SAKE(BaseNNP):
     def __init__(
             self,
-            n_atom_basis: int,
-            n_interactions: int,
-            n_rbf: int = 53,
+            embedding: nn.Module,
+            nr_interaction_blocks: int,
+            radial_basis: nn.Module,
             cutoff: float = 5.0,
             update: bool = True
 
@@ -28,55 +28,36 @@ class Sake(BaseNNP):
 
         Parameters
         ----------
-        n_atom_basis : int
-            Number of atom basis, defines the dimensionality of the output features.
-        n_interactions : int
+        nr_interaction_blocks : int
             Number of interaction blocks in the architecture.
         cutoff : float, optional
             Cutoff value for the pairlist. Default is 5.0.
         """
-        super().__init__()
+        super().__init__(embedding)
 
-        self.n_atom_basis = n_atom_basis
-        self.n_interactions = n_interactions
+        self.n_atom_basis = embedding.embedding_dim
+        self.nr_interaction_blocks = nr_interaction_blocks
+        self.radial_basis = radial_basis
 
-        def all_pairlist(R):
-            """
-            args:
-                R: np.nd_array with shape (sum(n_atoms), 3)
-            """
-            all_idxs = torch.arange(R.shape[0])
-            all_pairs = torch.cartesian_prod(all_idxs, all_idxs).T
-            r_ij = R[all_pairs[0]] - R[all_pairs[1]]
-
-            return {
-                "r_ij": r_ij,
-                "d_ij": torch.norm(r_ij, dim=1),
-                "atom_index12": all_pairs
-            }
-
-
-        self.calculate_distances_and_pairlist = all_pairlist
-
-        self.readout = EnergyReadout(n_atom_basis)
+        self.readout = EnergyReadout(self.n_atom_basis)
 
         self.first_interaction = SakeInteractionBlock(
-            in_features=n_atom_basis,
-            out_features=n_atom_basis,
-            hidden_features=n_atom_basis,
-            n_rbf=n_rbf,
+            in_features=self.n_atom_basis,
+            out_features=self.n_atom_basis,
+            hidden_features=self.n_atom_basis,
+            n_rbf=self.radial_basis.n_rbf,
             update=update,
         )
 
         self.interaction = SakeInteractionBlock(
-            in_features=n_atom_basis,
-            out_features=n_atom_basis,
-            hidden_features=n_atom_basis,
-            n_rbf=n_rbf,
+            in_features=self.n_atom_basis,
+            out_features=self.n_atom_basis,
+            hidden_features=self.n_atom_basis,
+            n_rbf=self.radial_basis.n_rbf,
             update=update,
         )
 
-    def forward(self, inputs: Dict[str, torch.Tensor]):
+    def _forward(self, inputs: Dict[str, torch.Tensor]):
         """
         Compute atomic representations/embeddings.
 
@@ -92,25 +73,22 @@ class Sake(BaseNNP):
             return_intermediate=True was used.
         """
         # get tensors from input dictionary
-        Z = inputs["Z"]
-        pairlist = self.calculate_distances_and_pairlist(inputs["R"])
+        atomic_numbers_embedding = inputs["atomic_numbers_embedding"]
+        qs = atomic_numbers_embedding.shape
+        q = atomic_numbers_embedding.reshape(qs[0], 1, qs[1])
 
-        q = nn.functional.one_hot(Z.squeeze(1), self.n_atom_basis).type(torch.float32)
-        qs = q.shape
-        mu = inputs["R"]
+        mu = inputs["d_ij"]
 
-        idx_i, idx_j = pairlist["atom_index12"]
+        pairlist = inputs["pair_indices"]
 
         q = self.first_interaction(
             q,
             mu,
-            pairlist["r_ij"],
-            pairlist["d_ij"],
-            idx_i,
-            idx_j
+            inputs["r_ij"],
+            inputs["d_ij"],
         )
 
-        for i in range(self.n_interactions):
+        for i in range(self.nr_interaction_blocks):
             q = self.interaction(
                 q,
                 mu,
@@ -259,10 +237,9 @@ class SakeInteractionBlock(nn.Module):
             self,
             q: torch.Tensor,
             mu: torch.Tensor,
-            r_ij: torch.Tensor,
-            d_ij: torch.Tensor,
-            idx_i: torch.Tensor,
-            idx_j: torch.Tensor,
+            Wij: torch.Tensor,  # shape [n_interactions]
+            dir_ij: torch.Tensor,
+            pairlist: torch.Tensor
     ) -> torch.Tensor:
         """
         Forward pass for the interaction block.

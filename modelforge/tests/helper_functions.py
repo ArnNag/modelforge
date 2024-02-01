@@ -4,6 +4,7 @@ from modelforge.dataset.dataset import TorchDataModule
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.potential.schnet import SchNET, LightningSchNET
 from modelforge.potential.painn import PaiNN, LighningPaiNN
+from modelforge.potential.sake import SAKE
 from modelforge.potential.models import BaseNNP
 
 from typing import Optional, Dict
@@ -74,6 +75,16 @@ def setup_simple_model(
             radial_basis=rbf,
             cutoff=cutoff,
         )
+    elif model_class is SAKE:
+        if lightning:
+            raise NotImplementedError
+        return SAKE(
+            embedding=embedding,
+            nr_interaction_blocks=nr_interaction_blocks,
+            radial_basis=rbf,
+            cutoff=cutoff
+        )
+
     else:
         raise NotImplementedError
 

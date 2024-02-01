@@ -1,31 +1,36 @@
 from typing import Dict
 
+import pytest
+
 import torch
 import numpy as np
 
-from modelforge.potential.sake import Sake
+from modelforge.potential.sake import SAKE
 
-from .helper_functions import generate_methane_input
-
-
-def test_Sake_init():
-    """Test initialization of the Sake model."""
-    sake = Sake(128, 6, 2)
-    assert sake is not None, "Sake model should be initialized."
+from .helper_functions import generate_methane_input, setup_simple_model, SIMPLIFIED_INPUT_DATA
 
 
-def test_Sake_forward():
+@pytest.mark.parametrize("lightning", [False])
+def test_SAKE_init(lightning):
+    """Test initialization of the SAKE neural network potential."""
+
+    sake = setup_simple_model(SAKE, lightning=lightning)
+    assert sake is not None, "PaiNN model should be initialized."
+
+# def test_Sake_init():
+#     """Test initialization of the Sake model."""
+#     sake = Sake(128, 6, 2)
+#     assert sake is not None, "Sake model should be initialized."
+
+
+@pytest.mark.parametrize("lightning", [False])
+@pytest.mark.parametrize("input_data", SIMPLIFIED_INPUT_DATA)
+def test_Sake_forward(lightning, input_data):
     """
     Test the forward pass of the Sake model.
     """
-    model = Sake(127, 2)
-    inputs = {
-        "Z": torch.tensor([[1], [2], [2], [3], [3]]),
-        "R": torch.tensor(
-            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.0, 0.0]]),
-        "atomic_subsystem_counts": torch.tensor([2, 3])
-    }
-    energy = model(inputs)
+    sake = setup_simple_model(SAKE, lightning=lightning)
+    energy = sake(input_data)
     assert energy.shape == (
         2,
         1,
@@ -38,7 +43,7 @@ def test_calculate_energies_and_forces():
     This test will be adapted once we have a trained model.
     """
 
-    sake = Sake(128, 6, 64)
+    sake = SAKE(128, 6, 64)
     methane_inputs = generate_methane_input()
     print(methane_inputs)
     result = sake(methane_inputs)
