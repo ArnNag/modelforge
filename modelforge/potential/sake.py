@@ -127,6 +127,7 @@ class SAKE(BaseNeuralNetworkPotential):
         atomic_embedding = self.embedding(
             F.one_hot(data.atomic_numbers.long(), num_classes=self.max_Z).to(self.embedding.weight.dtype))
 
+
         nnp_input = SAKENeuralNetworkInput(
             pair_indices=pairlist_output.pair_indices,
             number_of_atoms=number_of_atoms,
@@ -177,8 +178,12 @@ class SAKE(BaseNeuralNetworkPotential):
         x = data.positions
         v = torch.zeros_like(x)
 
+
+        count = 0  # FIXME: remove this line
         for interaction_mod in self.interaction_modules:
+            print(f"torch loop {count=}")
             h, x, v = interaction_mod(h, x, v, data.pair_indices)
+            count += 1  # FIXME: remove this line
 
         # Use squeeze to remove dimensions of size 1
         E_i = self.energy_layer(h).squeeze(1)
@@ -359,6 +364,7 @@ class SAKEInteraction(nn.Module):
         v_ij = self.v_mixing_mlp(combinations.transpose(-1, -2)).squeeze(-1)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(v_ij)
         dv = torch.zeros_like(v).scatter_reduce(0, expanded_idx_i, v_ij, "mean", include_self=False)
+        print(f"torch loop {dv=}")
         return self.velocity_mlp(h) * v + dv
 
     def get_combinations(self, h_ij_semantic, dir_ij):
@@ -486,6 +492,10 @@ class SAKEInteraction(nn.Module):
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
             Updated scalar and vector representations (h, x, v) with same shapes as input.
         """
+        print(f"torch {h=}")
+        print(f"torch {x=}")
+        print(f"torch {v=}")
+        print(f"torch {pairlist=}")
         idx_i, idx_j = pairlist
         nr_of_atoms_in_all_systems, _ = x.shape
         r_ij = x[idx_j] - x[idx_i]
@@ -497,6 +507,7 @@ class SAKEInteraction(nn.Module):
         del h_ij_edge
         h_i_semantic = self.aggregate(h_ij_semantic, idx_i, nr_of_atoms_in_all_systems)
         combinations = self.get_combinations(h_ij_semantic, dir_ij)
+        print(f"torch {combinations=}")
         del h_ij_semantic
         h_i_spatial = self.get_spatial_attention(combinations, idx_i, nr_of_atoms_in_all_systems)
         h_updated = self.update_node(h, h_i_semantic, h_i_spatial)
