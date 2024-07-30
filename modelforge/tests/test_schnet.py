@@ -32,7 +32,7 @@ def initialize_model(
         processing_operation=[],
         readout_operation=[
             {
-                "step": "from_atom_to_molecule",
+                "step": "from_atom_to_conformation",
                 "mode": "sum",
                 "in": "per_atom_energy",
                 "index_key": "atomic_subsystem_indices",

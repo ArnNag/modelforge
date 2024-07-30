@@ -51,7 +51,7 @@ def test_forward(single_batch_with_batchsize_64):
             "postprocessing_parameter"
         ],
     )
-    energy = sake(methane)["per_molecule_energy"]
+    energy = sake(methane)["per_conformation_energy"]
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
 
     assert (
@@ -447,7 +447,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
         postprocessing_parameter={
             "per_atom_energy": {
                 "normalize": True,
-                "from_atom_to_molecule_reduction": True,
+                "from_atom_to_conformation_reduction": True,
                 "keep_per_atom_property": True,
             }
         },
@@ -598,7 +598,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
     ref_out = ref_sake.apply(variables, h, x, mask=mask)[0].sum(-2)
     # ref_out is nan, so we can't compare it to the modelforge output
 
-    print(f"{mf_out['per_molecule_energy']=}")
+    print(f"{mf_out['per_conformation_energy']=}")
     print(f"{ref_out=}")
     # assert torch.allclose(mf_out.E, torch.from_numpy(onp.array(ref_out[0])))
 
@@ -628,5 +628,5 @@ def test_model_invariance(single_batch_with_batchsize_1):
     perturbed_out = model(perturbed_methane_input)
 
     assert torch.allclose(
-        reference_out["per_molecule_energy"], perturbed_out["per_molecule_energy"]
+        reference_out["per_conformation_energy"], perturbed_out["per_conformation_energy"]
     )

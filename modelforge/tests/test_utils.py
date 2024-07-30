@@ -471,7 +471,7 @@ def test_embedding():
 
 
 def test_energy_readout():
-    from modelforge.potential.processing import FromAtomToMoleculeReduction
+    from modelforge.potential.processing import FromAtomToConformationReduction
     import torch
 
     # the EnergyReadout module performs a linear pass to reduce the nr_of_atom_basis to 1
@@ -484,12 +484,12 @@ def test_energy_readout():
         "per_atom_energy": torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32),
         "atomic_subsystem_index": torch.tensor([0, 0, 1, 1, 1, 1, 1, 1]),
     }
-    energy_readout = FromAtomToMoleculeReduction(
+    energy_readout = FromAtomToConformationReduction(
         per_atom_property_name="per_atom_energy",
         index_name="atomic_subsystem_index",
-        output_name="per_molecule_energy",
+        output_name="per_conformation_energy",
     )
-    E = energy_readout(r)["per_molecule_energy"]
+    E = energy_readout(r)["per_conformation_energy"]
 
     # check that output has length of total number of molecules in batch
     assert E.size() == torch.Size(

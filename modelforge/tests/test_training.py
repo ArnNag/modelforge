@@ -101,8 +101,8 @@ import torch
 def test_error_calculation(single_batch_with_batchsize_16_with_force):
     # test the different Loss classes
     from modelforge.train.training import (
-        FromPerAtomToPerMoleculeMeanSquaredError,
-        PerMoleculeMeanSquaredError,
+        FromPerAtomToPerConformationMeanSquaredError,
+        PerConformationMeanSquaredError,
     )
 
     # generate data
@@ -114,11 +114,11 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     predicted_E = true_E + torch.rand_like(true_E) * 10
     predicted_F = true_F + torch.rand_like(true_F) * 10
 
-    # test error for property with shape (nr_of_molecules, 1)
-    error = PerMoleculeMeanSquaredError()
+    # test error for property with shape (nr_of_conformations, 1)
+    error = PerConformationMeanSquaredError()
     E_error = error(predicted_E, true_E, data)
 
-    # compare output (mean squared error scaled by number of atoms in the molecule)
+    # compare output (mean squared error scaled by number of atoms in the conformation)
     scale_squared_error = (
         (predicted_E - true_E) ** 2
     ) / data.metadata.atomic_subsystem_counts.unsqueeze(
@@ -128,10 +128,10 @@ def test_error_calculation(single_batch_with_batchsize_16_with_force):
     assert torch.allclose(E_error, reference_E_error)
 
     # test error for property with shape (nr_of_atoms, 3)
-    error = FromPerAtomToPerMoleculeMeanSquaredError()
+    error = FromPerAtomToPerConformationMeanSquaredError()
     F_error = error(predicted_F, true_F, data)
 
-    # compare error (mean squared error scaled by number of atoms in the molecule)
+    # compare error (mean squared error scaled by number of atoms in the conformation)
 
     scaled_error = (
         torch.linalg.vector_norm(predicted_F - true_F, dim=1, keepdim=True) ** 2

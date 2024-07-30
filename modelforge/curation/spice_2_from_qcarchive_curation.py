@@ -95,7 +95,7 @@ class SPICE2Curation(DatasetCuration):
     def _init_dataset_parameters(self):
         self.qcarchive_server = "ml.qcarchive.molssi.org"
 
-        self.molecule_names = {}
+        self.system_names = {}
 
         # dictionary of properties and their input units (i.e., those from QCArchive)
         # and desired output units; unit conversion is performed if convert_units = True
@@ -156,7 +156,7 @@ class SPICE2Curation(DatasetCuration):
         These labels will also allow us to define whether a given entry is per-atom, per-molecule,
         or is a scalar/string that applies to the entire record.
         Options include:
-        single_rec, e.g., name, n_configs, smiles
+        single_rec, e.g., name, n_conformations, smiles
         single_atom, e.g., atomic_numbers (these are the same for all conformers)
         single_mol, e.g., reference energy
         series_atom, e.g., charges
@@ -165,7 +165,7 @@ class SPICE2Curation(DatasetCuration):
 
         Examples
         >>> series = {'name': 'single_rec', 'atomic_numbers': 'single_atom',
-                      ... 'n_configs': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
+                      ... 'n_conformations': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
         """
 
         self._record_entries_series = {
@@ -174,7 +174,7 @@ class SPICE2Curation(DatasetCuration):
             "source": "single_rec",
             "atomic_numbers": "single_atom",
             "total_charge": "single_rec",
-            "n_configs": "single_rec",
+            "n_conformations": "single_rec",
             "reference_energy": "single_rec",
             "molecular_formula": "single_rec",
             "canonical_isomeric_explicit_hydrogen_mapped_smiles": "single_rec",
@@ -520,8 +520,8 @@ class SPICE2Curation(DatasetCuration):
         local_path_dir: str,
         filenames: List[str],
         dataset_sources: List[Dict],
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
+            max_conformations_per_record: Optional[int] = None,
+            total_conformations: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -576,8 +576,8 @@ class SPICE2Curation(DatasetCuration):
                     name = molecule_names[key]
                     # if we haven't processed a molecule with this name yet
                     # we will add to the molecule_names dictionary
-                    if name not in self.molecule_names.keys():
-                        self.molecule_names[name] = len(self.data)
+                    if name not in self.system_names.keys():
+                        self.system_names[name] = len(self.data)
 
                         data_temp = {}
                         data_temp["name"] = name
@@ -598,7 +598,7 @@ class SPICE2Curation(DatasetCuration):
                         ] = val["molecule"]["extras"][
                             "canonical_isomeric_explicit_hydrogen_mapped_smiles"
                         ]
-                        data_temp["n_configs"] = 1
+                        data_temp["n_conformations"] = 1
                         data_temp["geometry"] = val["molecule"]["geometry"].reshape(
                             1, -1, 3
                         )
@@ -615,9 +615,9 @@ class SPICE2Curation(DatasetCuration):
                     else:
                         # if we have already encountered this molecule we need to append to the data
                         # since we are using numpy we will use vstack to append to the arrays
-                        index = self.molecule_names[name]
+                        index = self.system_names[name]
 
-                        self.data[index]["n_configs"] += 1
+                        self.data[index]["n_conformations"] += 1
                         self.data[index]["geometry"] = np.vstack(
                             (
                                 self.data[index]["geometry"],
@@ -634,7 +634,7 @@ class SPICE2Curation(DatasetCuration):
                     name = molecule_names[key]
                     val = spice_db[original_keys[key]]
 
-                    index = self.molecule_names[name]
+                    index = self.system_names[name]
 
                     # note, we will use the convention of names being lowercase
                     # and spaces denoted by underscore
@@ -769,48 +769,48 @@ class SPICE2Curation(DatasetCuration):
 
             datapoint["formation_energy"] = (
                 datapoint["dft_total_energy"]
-                - np.array(datapoint["reference_energy"].m * datapoint["n_configs"])
+                - np.array(datapoint["reference_energy"].m * datapoint["n_conformations"])
                 * datapoint["reference_energy"].u
             )
 
         if self.convert_units:
             self._convert_units()
 
-        if total_conformers is not None or max_conformers_per_record is not None:
-            conformers_count = 0
+        if total_conformations is not None or max_conformations_per_record is not None:
+            conformations_count = 0
             temp_data = []
             for datapoint in self.data:
-                if total_conformers is not None:
-                    if conformers_count >= total_conformers:
+                if total_conformations is not None:
+                    if conformations_count >= total_conformations:
                         break
-                n_conformers = datapoint["n_configs"]
-                if max_conformers_per_record is not None:
-                    n_conformers = min(n_conformers, max_conformers_per_record)
+                n_conformations = datapoint["n_conformations"]
+                if max_conformations_per_record is not None:
+                    n_conformations = min(n_conformations, max_conformations_per_record)
 
-                if total_conformers is not None:
-                    n_conformers = min(
-                        n_conformers, total_conformers - conformers_count
+                if total_conformations is not None:
+                    n_conformations = min(
+                        n_conformations, total_conformations - conformations_count
                     )
 
-                datapoint["n_configs"] = n_conformers
-                datapoint["geometry"] = datapoint["geometry"][0:n_conformers]
+                datapoint["n_conformations"] = n_conformations
+                datapoint["geometry"] = datapoint["geometry"][0:n_conformations]
                 datapoint["dft_total_energy"] = datapoint["dft_total_energy"][
-                    0:n_conformers
+                                                0:n_conformations
                 ]
                 datapoint["dft_total_gradient"] = datapoint["dft_total_gradient"][
-                    0:n_conformers
+                                                  0:n_conformations
                 ]
                 datapoint["dft_total_force"] = datapoint["dft_total_force"][
-                    0:n_conformers
+                                               0:n_conformations
                 ]
                 datapoint["formation_energy"] = datapoint["formation_energy"][
-                    0:n_conformers
+                                                0:n_conformations
                 ]
-                datapoint["mbis_charges"] = datapoint["mbis_charges"][0:n_conformers]
-                datapoint["scf_dipole"] = datapoint["scf_dipole"][0:n_conformers]
+                datapoint["mbis_charges"] = datapoint["mbis_charges"][0:n_conformations]
+                datapoint["scf_dipole"] = datapoint["scf_dipole"][0:n_conformations]
 
                 temp_data.append(datapoint)
-                conformers_count += n_conformers
+                conformations_count += n_conformations
             self.data = temp_data
 
     def process(
@@ -973,15 +973,15 @@ class SPICE2Curation(DatasetCuration):
                         )
         logger.debug(f"Data fetched.")
         self._clear_data()
-        self.molecule_names.clear()
+        self.system_names.clear()
         logger.debug(f"Processing downloaded dataset.")
 
         self._process_downloaded(
             self.local_cache_dir,
             local_database_names,
             dataset_sources,
-            max_conformers_per_record=max_conformers_per_record,
-            total_conformers=total_conformers,
+            max_conformations_per_record=max_conformers_per_record,
+            total_conformations=total_conformers,
         )
 
         self._generate_hdf5()

@@ -143,7 +143,7 @@ class SPICE1Curation(DatasetCuration):
         These labels will also allow us to define whether a given entry is per-atom, per-molecule,
         or is a scalar/string that applies to the entire record.
         Options include:
-        single_rec, e.g., name, n_configs, smiles
+        single_rec, e.g., name, n_conformations, smiles
         single_atom, e.g., atomic_numbers (these are the same for all conformers)
         series_atom, e.g., charges
         series_mol, e.g., dft energy, dipole moment, etc.
@@ -151,13 +151,13 @@ class SPICE1Curation(DatasetCuration):
 
         Examples
         >>> series = {'name': 'single_rec', 'atomic_numbers': 'single_atom',
-                      ... 'n_configs': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
+                      ... 'n_conformations': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
         """
 
         self._record_entries_series = {
             "name": "single_rec",
             "atomic_numbers": "single_atom",
-            "n_configs": "single_rec",
+            "n_conformations": "single_rec",
             "smiles": "single_rec",
             "subset": "single_rec",
             "total_charge": "single_rec",
@@ -272,7 +272,7 @@ class SPICE1Curation(DatasetCuration):
                         conformers_per_record, total_conformers - conformers_counter
                     )
 
-                ds_temp["n_configs"] = conformers_per_record
+                ds_temp["n_conformations"] = conformers_per_record
 
                 # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
                 for param_in, param_data in self.qm_parameters.items():

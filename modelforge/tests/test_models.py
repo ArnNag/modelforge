@@ -71,7 +71,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize_64):
 
     assert "JAX" in str(type(model))
     nnp_input = single_batch_with_batchsize_64.nnp_input.as_jax_namedtuple()
-    out = model(nnp_input)["per_molecule_energy"]
+    out = model(nnp_input)["per_conformation_energy"]
     import jax
 
     grad_fn = jax.grad(lambda pos: out.sum())  # Create a gradient function
@@ -205,7 +205,7 @@ def test_energy_scaling_and_offset():
 
     # make sure that the raw prediction is the same
     assert torch.isclose(
-        output_with_molecular_self_energies["per_molecule_self_energy"],
+        output_with_molecular_self_energies["per_conformation_self_energy"],
         torch.tensor([-104620.5859]),
     )
 
@@ -347,7 +347,7 @@ def test_energy_between_simulation_environments(
         model_parameter=config["potential"].model_dump(),
     )
 
-    output_torch = model(nnp_input)["per_molecule_energy"]
+    output_torch = model(nnp_input)["per_conformation_energy"]
 
     torch.manual_seed(42)
     model = NeuralNetworkPotentialFactory.generate_model(
@@ -356,7 +356,7 @@ def test_energy_between_simulation_environments(
         model_parameter=config["potential"].model_dump(),
     )
     nnp_input = nnp_input.as_jax_namedtuple()
-    output_jax = model(nnp_input)["per_molecule_energy"]
+    output_jax = model(nnp_input)["per_conformation_energy"]
 
     # test tat we get an energie per molecule
     assert np.isclose(output_torch.sum().detach().numpy(), output_jax.sum())
@@ -401,10 +401,10 @@ def test_forward_pass_with_all_datasets(
     output = model(batch.nnp_input)
 
     # test that the output has the following keys and follwing dim
-    assert "per_molecule_energy" in output
+    assert "per_conformation_energy" in output
     assert "per_atom_energy" in output
 
-    assert output["per_molecule_energy"].shape[0] == 64
+    assert output["per_conformation_energy"].shape[0] == 64
     assert output["per_atom_energy"].shape == batch.nnp_input.atomic_numbers.shape
 
     pair_list = batch.nnp_input.pair_list
@@ -440,7 +440,7 @@ def test_forward_pass(
     output = model(nnp_input)
 
     # test that we get an energie per molecule
-    assert len(output["per_molecule_energy"]) == nr_of_mols
+    assert len(output["per_conformation_energy"]) == nr_of_mols
 
     # the batch consists of methane (CH4) and amamonium (NH3)
     # which have chemically equivalent hydrogens at the minimum geometry.
@@ -460,12 +460,12 @@ def test_forward_pass(
 
         # make sure that the total energy is \sum E_i
         assert torch.allclose(
-            output["per_molecule_energy"][0],
+            output["per_conformation_energy"][0],
             output["per_atom_energy"][0:5].sum(dim=0),
             atol=1e-5,
         )
         assert torch.allclose(
-            output["per_molecule_energy"][1],
+            output["per_conformation_energy"][1],
             output["per_atom_energy"][5:9].sum(dim=0),
             atol=1e-5,
         )
@@ -492,7 +492,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
         use="inference",
         model_parameter=config["potential"].model_dump(),
     )
-    E_inference = model_inference(nnp_input)["per_molecule_energy"]
+    E_inference = model_inference(nnp_input)["per_conformation_energy"]
 
     # backpropagation
     F_inference = -torch.autograd.grad(
@@ -513,7 +513,7 @@ def test_calculate_energies_and_forces(potential_name, single_batch_with_batchsi
         training_parameter=config["training"].model_dump(),
     )
 
-    E_training = model_training.model.forward(nnp_input)["per_molecule_energy"]
+    E_training = model_training.model.forward(nnp_input)["per_conformation_energy"]
     F_training = -torch.autograd.grad(
         E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
@@ -551,7 +551,7 @@ def test_calculate_energies_and_forces_with_jax(
 
     nnp_input = nnp_input.as_jax_namedtuple()
 
-    result = model(nnp_input)["per_molecule_energy"]
+    result = model(nnp_input)["per_conformation_energy"]
 
     from modelforge.utils.io import import_
 
@@ -1001,7 +1001,7 @@ def test_equivariant_energies_and_forces(
     # start the test
     # reference values
     nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float64)
-    reference_result = model(nnp_input)["per_molecule_energy"].to(dtype=torch.float64)
+    reference_result = model(nnp_input)["per_conformation_energy"].to(dtype=torch.float64)
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
@@ -1010,7 +1010,7 @@ def test_equivariant_energies_and_forces(
     # translation test
     translation_nnp_input = replace(nnp_input)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
-    translation_result = model(translation_nnp_input)["per_molecule_energy"]
+    translation_result = model(translation_nnp_input)["per_conformation_energy"]
     assert torch.allclose(
         translation_result,
         reference_result,
@@ -1035,7 +1035,7 @@ def test_equivariant_energies_and_forces(
     # rotation test
     rotation_input_data = replace(nnp_input)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
-    rotation_result = model(rotation_input_data)["per_molecule_energy"]
+    rotation_result = model(rotation_input_data)["per_conformation_energy"]
 
     for t, r in zip(rotation_result, reference_result):
         if not torch.allclose(t, r, atol=atol):
@@ -1064,7 +1064,7 @@ def test_equivariant_energies_and_forces(
     # reflection test
     reflection_input_data = replace(nnp_input)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
-    reflection_result = model(reflection_input_data)["per_molecule_energy"]
+    reflection_result = model(reflection_input_data)["per_conformation_energy"]
     reflection_forces = -torch.autograd.grad(
         reflection_result.sum(),
         reflection_input_data.positions,

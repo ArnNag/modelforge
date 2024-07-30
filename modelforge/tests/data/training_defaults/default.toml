@@ -3,7 +3,7 @@ number_of_epochs = 2
 remove_self_energies = true
 batch_size = 128
 lr = 1e-3
-monitor = "val/per_molecule_energy/rmse"
+monitor = "val/per_conformation_energy/rmse"
 
 [training.experiment_logger]
 logger_name = "tensorboard"
@@ -17,20 +17,20 @@ cooldown = 5
 min_lr = 1e-8
 threshold = 0.1
 threshold_mode = "abs"
-monitor = "val/per_molecule_energy/rmse"
+monitor = "val/per_conformation_energy/rmse"
 interval = "epoch"
 
 [training.loss_parameter]
-loss_property = ['per_molecule_energy', 'per_atom_force'] # use
+loss_property = ['per_conformation_energy', 'per_atom_force'] # use
 
 [training.loss_parameter.weight]
-per_molecule_energy = 0.999 #NOTE: reciprocal units
+per_conformation_energy = 0.999 #NOTE: reciprocal units
 per_atom_force = 0.001
 
 
 [training.early_stopping]
 verbose = true
-monitor = "val/per_molecule_energy/rmse"
+monitor = "val/per_conformation_energy/rmse"
 min_delta = 0.001
 patience = 50
 

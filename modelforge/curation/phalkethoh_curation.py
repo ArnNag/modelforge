@@ -46,7 +46,7 @@ class PhAlkEthOHCuration(DatasetCuration):
     def _init_dataset_parameters(self):
         self.qcarchive_server = "https://api.qcarchive.molssi.org"
 
-        self.molecule_names = {}
+        self.system_names = {}
 
         # dictionary of properties and their input units (i.e., those from QCArchive)
         # and desired output units; unit conversion is performed if convert_units = True
@@ -334,8 +334,8 @@ class PhAlkEthOHCuration(DatasetCuration):
                     name = key
                     # if we haven't processed a molecule with this name yet
                     # we will add to the molecule_names dictionary
-                    if name not in self.molecule_names.keys():
-                        self.molecule_names[name] = len(self.data)
+                    if name not in self.system_names.keys():
+                        self.system_names[name] = len(self.data)
 
                         data_temp = {}
                         data_temp["name"] = name
@@ -375,7 +375,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                     # name = key.split("-")[0]
                     trajectory = spice_db[key][1]
                     name = key
-                    index = self.molecule_names[name]
+                    index = self.system_names[name]
 
                     for state in trajectory:
                         properties, config = state
@@ -643,7 +643,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                         )
         logger.debug(f"Data fetched.")
         self._clear_data()
-        self.molecule_names.clear()
+        self.system_names.clear()
         logger.debug(f"Processing downloaded dataset.")
 
         if limit_atomic_species is not None:

@@ -65,14 +65,14 @@ class Error(nn.Module, ABC):
         return scaled_by_number_of_atoms
 
 
-class FromPerAtomToPerMoleculeMeanSquaredError(Error):
+class FromPerAtomToPerConformationMeanSquaredError(Error):
     """
-    Calculates the per-atom error and aggregates it to per-molecule mean squared error.
+    Calculates the per-atom error and aggregates it to per-conformation mean squared error.
     """
 
     def __init__(self):
         """
-        Initializes the PerAtomToPerMoleculeError class.
+        Initializes the PerAtomToPerConformationMeanSquaredError class.
         """
         super().__init__()
 
@@ -93,7 +93,7 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
         batch: "NNPInput",
     ) -> torch.Tensor:
         """
-        Computes the per-atom error and aggregates it to per-molecule mean squared error.
+        Computes the per-atom error and aggregates it to per-conformation mean squared error.
 
         Parameters
         ----------
@@ -107,7 +107,7 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
         Returns
         -------
         torch.Tensor
-            The aggregated per-molecule error.
+            The aggregated per-conformation error.
         """
 
         # squared error
@@ -115,51 +115,51 @@ class FromPerAtomToPerMoleculeMeanSquaredError(Error):
             per_atom_prediction, per_atom_reference
         )
 
-        per_molecule_squared_error = torch.zeros_like(
+        per_conformation_squared_error = torch.zeros_like(
             batch.metadata.E, dtype=per_atom_squared_error.dtype
         )
-        # Aggregate error per molecule
+        # Aggregate error per conformation
 
-        per_molecule_squared_error.scatter_add_(
+        per_conformation_squared_error.scatter_add_(
             0,
             batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
             per_atom_squared_error,
         )
         # divide by number of atoms
-        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
+        per_conformation_square_error_scaled = self.scale_by_number_of_atoms(
+            per_conformation_squared_error, batch.metadata.atomic_subsystem_counts
         )
         # return the average
-        return torch.mean(per_molecule_square_error_scaled)
+        return torch.mean(per_conformation_square_error_scaled)
 
 
-class PerMoleculeMeanSquaredError(Error):
+class PerConformationMeanSquaredError(Error):
     """
-    Calculates the per-molecule mean squared error.
+    Calculates the per-conformation mean squared error.
 
     """
 
     def __init__(self):
         """
-        Initializes the PerMoleculeMeanSquaredError class.
+        Initializes the PerConformationMeanSquaredError class.
         """
 
         super().__init__()
 
     def forward(
         self,
-        per_molecule_prediction: torch.Tensor,
-        per_molecule_reference: torch.Tensor,
+            per_conformation_prediction: torch.Tensor,
+            per_conformation_reference: torch.Tensor,
         batch,
     ) -> torch.Tensor:
         """
-        Computes the per-molecule mean squared error.
+        Computes the per-conformation mean squared error.
 
         Parameters
         ----------
-        per_molecule_prediction : torch.Tensor
+        per_conformation_prediction : torch.Tensor
             The predicted values.
-        per_molecule_reference : torch.Tensor
+        per_conformation_reference : torch.Tensor
             The true values.
         batch : Any
             The batch data containing metadata and input information.
@@ -167,18 +167,18 @@ class PerMoleculeMeanSquaredError(Error):
         Returns
         -------
         torch.Tensor
-            The mean per-molecule error.
+            The mean per-conformation error.
         """
 
-        per_molecule_squared_error = self.calculate_error(
-            per_molecule_prediction, per_molecule_reference
+        per_conformation_squared_error = self.calculate_error(
+            per_conformation_prediction, per_conformation_reference
         )
-        per_molecule_square_error_scaled = self.scale_by_number_of_atoms(
-            per_molecule_squared_error, batch.metadata.atomic_subsystem_counts
+        per_conformation_square_error_scaled = self.scale_by_number_of_atoms(
+            per_conformation_squared_error, batch.metadata.atomic_subsystem_counts
         )
 
         # return the average
-        return torch.mean(per_molecule_square_error_scaled)
+        return torch.mean(per_conformation_square_error_scaled)
 
     def calculate_error(
         self,
@@ -205,7 +205,7 @@ class Loss(nn.Module):
         Module dictionary containing the loss functions for each property.
     """
 
-    _SUPPORTED_PROPERTIES = ["per_molecule_energy", "per_atom_force"]
+    _SUPPORTED_PROPERTIES = ["per_conformation_energy", "per_atom_force"]
 
     def __init__(self, loss_porperty: List[str], weight: Dict[str, float]):
         """
@@ -234,9 +234,9 @@ class Loss(nn.Module):
         for prop, w in weight.items():
             if prop in self._SUPPORTED_PROPERTIES:
                 if prop == "per_atom_force":
-                    self.loss[prop] = FromPerAtomToPerMoleculeMeanSquaredError()
-                elif prop == "per_molecule_energy":
-                    self.loss[prop] = PerMoleculeMeanSquaredError()
+                    self.loss[prop] = FromPerAtomToPerConformationMeanSquaredError()
+                elif prop == "per_conformation_energy":
+                    self.loss[prop] = PerConformationMeanSquaredError()
                 self.register_buffer(prop, torch.tensor(w))
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
@@ -433,17 +433,17 @@ class TrainingAdapter(pl.LightningModule):
         if per_atom_force_true.numel() < 1:
             raise RuntimeError("No force can be calculated.")
 
-        per_molecule_energy_predict = energies["per_molecule_energy_predict"]
+        per_conformation_energy_predict = energies["per_conformation_energy_predict"]
 
         # Ensure E_predict and nnp_input.positions require gradients and are on the same device
-        if not per_molecule_energy_predict.requires_grad:
-            per_molecule_energy_predict.requires_grad = True
+        if not per_conformation_energy_predict.requires_grad:
+            per_conformation_energy_predict.requires_grad = True
         if not nnp_input.positions.requires_grad:
             nnp_input.positions.requires_grad = True
 
         # Compute the gradient (forces) from the predicted energies
         grad = torch.autograd.grad(
-            per_molecule_energy_predict.sum(),
+            per_conformation_energy_predict.sum(),
             nnp_input.positions,
             create_graph=False,
             retain_graph=True,
@@ -470,19 +470,19 @@ class TrainingAdapter(pl.LightningModule):
             The true energies from the dataset and the predicted energies by the model.
         """
         nnp_input = batch.nnp_input
-        per_molecule_energy_true = batch.metadata.E.to(torch.float32)
-        per_molecule_energy_predict = self.model.forward(nnp_input)[
-            "per_molecule_energy"
+        per_conformation_energy_true = batch.metadata.E.to(torch.float32)
+        per_conformation_energy_predict = self.model.forward(nnp_input)[
+            "per_conformation_energy"
         ].unsqueeze(
             1
         )  # FIXME: ensure that all per-molecule properties have dimension (N, 1)
-        assert per_molecule_energy_true.shape == per_molecule_energy_predict.shape, (
+        assert per_conformation_energy_true.shape == per_conformation_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
-            f"{per_molecule_energy_true.shape} != {per_molecule_energy_predict.shape}"
+            f"{per_conformation_energy_true.shape} != {per_conformation_energy_predict.shape}"
         )
         return {
-            "per_molecule_energy_true": per_molecule_energy_true,
-            "per_molecule_energy_predict": per_molecule_energy_predict,
+            "per_conformation_energy_true": per_conformation_energy_true,
+            "per_conformation_energy_predict": per_conformation_energy_predict,
         }
 
     def _get_predictions(self, batch: "BatchData") -> Dict[str, torch.Tensor]:

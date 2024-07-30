@@ -15,7 +15,7 @@ from .utils import (
     RadialBasisFunction,
     AngularSymmetryFunction,
 )
-from .processing import FromAtomToMoleculeReduction
+from .processing import FromAtomToConformationReduction
 from .models import NeuralNetworkPotentialFactory
 from enum import Enum
 

@@ -225,7 +225,7 @@ class QM9Curation(DatasetCuration):
         These labels will also allow us to define whether a given entry is per-atom, per-molecule,
         or is a scalar/string that applies to the entire record.
         Options include:
-        single_rec, e.g., name, n_configs, smiles
+        single_rec, e.g., name, n_conformations, smiles
         single_atom, e.g., atomic_numbers (these are the same for all conformers)
         series_atom, e.g., charges
         series_mol, e.g., dft energy, dipole moment, etc.
@@ -233,12 +233,12 @@ class QM9Curation(DatasetCuration):
 
         Examples
         >>> series = {'name': 'single_rec', 'atomic_numbers': 'single_atom',
-                      ... 'n_configs': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
+                      ... 'n_conformations': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
         """
 
         self._record_entries_series = {
             "name": "single_rec",
-            "n_configs": "single_rec",
+            "n_conformations": "single_rec",
             "smiles_gdb-17": "single_rec",
             "smiles_b3lyp": "single_rec",
             "inchi_corina": "single_rec",
@@ -429,7 +429,7 @@ class QM9Curation(DatasetCuration):
             # end of file, now parse the inputs
 
             data_temp["name"] = file_name.split("/")[-1].split(".")[0]
-            data_temp["n_configs"] = 1
+            data_temp["n_conformations"] = 1
             data_temp["smiles_gdb-17"] = smiles[0]
             data_temp["smiles_b3lyp"] = smiles[1]
             data_temp["inchi_corina"] = (

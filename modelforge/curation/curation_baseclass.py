@@ -31,7 +31,7 @@ def dict_to_hdf5(
     Examples
     --------
     >>> series = {'name': 'single_rec', 'atomic_numbers': 'single_atom',
-    ... 'n_configs': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
+    ... 'n_conformations': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
     >>> dict_to_hdf5(file_name='qm9.hdf5', data=data, series_info=series, id_key='name')
     """
 
@@ -184,7 +184,7 @@ class DatasetCuration(ABC):
         """
         total = 0
         for record in self.data:
-            total += record["n_configs"]
+            total += record["n_conformations"]
         return total
 
     @property
@@ -250,7 +250,7 @@ class DatasetCuration(ABC):
         These labels will also allow us to define whether a given entry is per-atom, per-molecule,
         or is a scalar/string that applies to the entire record.
         Options include:
-        single_rec, e.g., name, n_configs, smiles
+        single_rec, e.g., name, n_conformations, smiles
         single_atom, e.g., atomic_numbers (these are the same for all conformers)
         series_atom, e.g., charges
         series_mol, e.g., dft energy, dipole moment, etc.
@@ -258,7 +258,7 @@ class DatasetCuration(ABC):
 
         Examples
         >>> series = {'name': 'single_rec', 'atomic_numbers': 'single_atom',
-                      ... 'n_configs': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
+                      ... 'n_conformations': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
         """
         self._record_entries_series = {}
         pass

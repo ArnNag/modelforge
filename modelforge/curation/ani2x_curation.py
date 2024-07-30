@@ -99,7 +99,7 @@ class ANI2xCuration(DatasetCuration):
         These labels will also allow us to define whether a given entry is per-atom, per-molecule,
         or is a scalar/string that applies to the entire record.
         Options include:
-        single_rec, e.g., name, n_configs, smiles
+        single_rec, e.g., name, n_conformations, smiles
         single_atom, e.g., atomic_numbers (these are the same for all conformers)
         single_mol, e.g., reference energy
         series_atom, e.g., charges
@@ -108,14 +108,14 @@ class ANI2xCuration(DatasetCuration):
 
         Examples
         >>> series = {'name': 'single_rec', 'atomic_numbers': 'single_atom',
-                      ... 'n_configs': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
+                      ... 'n_conformations': 'single_rec', 'geometry': 'series_atom', 'energy': 'series_mol'}
         """
         self._record_entries_series = {
             "geometry": "series_atom",
             "energies": "series_mol",
             "forces": "series_atom",
             "atomic_numbers": "single_atom",
-            "n_configs": "single_rec",
+            "n_conformations": "single_rec",
             "name": "single_rec",
         }
 
@@ -234,7 +234,7 @@ class ANI2xCuration(DatasetCuration):
                             conformers_per_molecule,
                             total_conformers - conformers_counter,
                         )
-                    ds_temp["n_configs"] = conformers_per_molecule
+                    ds_temp["n_conformations"] = conformers_per_molecule
 
                     ds_temp["geometry"] = (
                         coordinates[indices] * self.qm_parameters["geometry"]["u_in"]

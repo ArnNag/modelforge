@@ -57,7 +57,7 @@ def load_dataset_energy_statistics(path: str) -> Dict[str, unit.Quantity]:
     return training_dataset_statistics
 
 
-class FromAtomToMoleculeReduction(torch.nn.Module):
+class FromAtomToConformationReduction(torch.nn.Module):
     """
     Reducing per-atom property to per-molecule property.
     """
@@ -110,16 +110,16 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         indices = data[self.index_name].to(torch.int64)
         per_atom_property = data[self.per_atom_property_name]
         # Perform scatter add operation for atoms belonging to the same molecule
-        property_per_molecule_zeros = torch.zeros(
+        property_per_conformation_zeros = torch.zeros(
             len(indices.unique()),
             dtype=per_atom_property.dtype,
             device=per_atom_property.device,
         )
 
-        property_per_molecule = property_per_molecule_zeros.scatter_reduce(
+        property_per_conformation = property_per_conformation_zeros.scatter_reduce(
             0, indices, per_atom_property, reduce=self.reduction_mode
         )
-        data[self.output_name] = property_per_molecule
+        data[self.output_name] = property_per_conformation
         if self.keep_per_atom_property is False:
             del data[self.per_atom_property_name]
 

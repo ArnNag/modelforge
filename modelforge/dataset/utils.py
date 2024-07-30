@@ -133,23 +133,24 @@ def calculate_mean_and_variance(
 from openff.units import unit
 
 
-def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quantity]:
+def _calculate_self_energies(torch_dataset: TorchDataset, collate_fn) -> Dict[str, unit.Quantity]:
     from torch.utils.data import DataLoader
     import torch
     from loguru import logger as log
+    # TODO: systems or conformations?
 
     # Initialize variables to hold data for regression
     batch_size = 64
     # Determine the size of the counts tensor
-    num_molecules = torch_dataset.number_of_records
+    num_systems = torch_dataset.number_of_systems
     # Determine up to which Z we detect elements
     max_atomic_number = 100
     # Initialize the counts tensor
-    counts = torch.zeros(num_molecules, max_atomic_number + 1, dtype=torch.int16)
+    counts = torch.zeros(num_systems, max_atomic_number + 1, dtype=torch.int16)
     # save energies in list
-    energy_array = torch.zeros(torch_dataset.number_of_records, dtype=torch.float64)
+    energy_array = torch.zeros(torch_dataset.number_of_systems, dtype=torch.float64)
     # for filling in the element count matrix
-    molecule_counter = 0
+    system_counter = 0
     # counter for saving energy values
     current_index = 0
     # save unique atomic numbers in list
@@ -159,7 +160,7 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
         torch_dataset, batch_size=batch_size, collate_fn=collate_fn
     ):
         a = 7
-        energies, atomic_numbers, molecules_id = (
+        energies, atomic_numbers, system_ids = (
             batch.metadata.E.squeeze(),
             batch.nnp_input.atomic_numbers.squeeze(-1).to(torch.int64),
             batch.nnp_input.atomic_subsystem_indices.to(torch.int16),
@@ -172,17 +173,17 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
         unique_atomic_numbers |= set(atomic_numbers.tolist())
         atomic_numbers_ = atomic_numbers - 1
 
-        # Count the occurrence of each atomic number in molecules
-        for molecule_id in molecules_id.unique():
-            mask = molecules_id == molecule_id
-            counts[molecule_counter].scatter_add_(
+        # Count the occurrence of each atomic number in systems
+        for system_id in system_ids.unique():
+            mask = system_ids == system_id
+            counts[system_counter].scatter_add_(
                 0,
                 atomic_numbers_[mask],
                 torch.ones_like(atomic_numbers_[mask], dtype=torch.int16),
             )
-            molecule_counter += 1
+            system_counter += 1
 
-    # Prepare the data for lineare regression
+    # Prepare the data for linear regression
     valid_elements_mask = counts.sum(dim=0) > 0
     filtered_counts = counts[:, valid_elements_mask]
 

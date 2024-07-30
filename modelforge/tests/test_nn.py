@@ -34,7 +34,7 @@ def test_embedding(single_batch_with_batchsize_64):
     assert "Identity()" in mixing_module_name
 
     # add total charge to the input
-    featurization_config["properties_to_featurize"].append("per_molecule_total_charge")
+    featurization_config["properties_to_featurize"].append("per_conformation_total_charge")
     featurize_input_module = FeaturizeInput(featurization_config)
 
     # only nuclear charges embedded
@@ -55,7 +55,7 @@ def test_embedding(single_batch_with_batchsize_64):
 
     assert "Dense" in mixing_module_name
 
-    # make a forward pass, embedd nuclear charges and add total charge (is expanded from per-molecule to per-atom property). Mix the properties then.
+    # make a forward pass, embedd nuclear charges and add total charge (is expanded from per-conformation to per-atom property). Mix the properties then.
     out = featurize_input_module(nnp_input)
     assert out.shape == torch.Size(
         [557, 32]

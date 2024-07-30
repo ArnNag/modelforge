@@ -82,16 +82,16 @@ class NNPInput:
     ----------
     atomic_numbers : torch.Tensor
         A 1D tensor containing atomic numbers for each atom in the system(s).
-        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all systems.
+        Shape: [num_atoms], where `num_atoms` is the total number of atoms across all conformations.
     positions : torch.Tensor
         A 2D tensor of shape [num_atoms, 3], representing the XYZ coordinates of each atom.
     atomic_subsystem_indices : torch.Tensor
-        A 1D tensor mapping each atom to its respective subsystem or molecule.
-        This allows for calculations involving multiple molecules or subsystems within the same batch.
+        A 1D tensor mapping each atom to its respective conformation.
+        This allows for calculations involving multiple conformations within the same batch.
         Shape: [num_atoms].
     total_charge : torch.Tensor
-        A tensor with the total charge of molecule.
-        Shape: [num_systems], where `num_systems` is the number of molecules.
+        A tensor with the total charge of each conformation.
+        Shape: [num_conformations], where `num_conformations` is the number of conformations in the batch.
     """
 
     atomic_numbers: torch.Tensor
@@ -279,7 +279,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
                 dataset[property_name.positions].shape
             )
 
-        self.number_of_records = len(dataset["atomic_subsystem_counts"])
+        self.number_of_systems = len(dataset["atomic_subsystem_counts"])
         self.properties_of_interest["pair_list"] = None
         self.number_of_atoms = len(dataset["atomic_numbers"])
 
@@ -299,10 +299,10 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
             )
 
         self.single_atom_start_idxs_by_conf = np.repeat(
-            single_atom_start_idxs_by_rec[: self.number_of_records], dataset["n_confs"]
+            single_atom_start_idxs_by_rec[: self.number_of_systems], dataset["n_confs"]
         )
         self.single_atom_end_idxs_by_conf = np.repeat(
-            single_atom_start_idxs_by_rec[1 : self.number_of_records + 1],
+            single_atom_start_idxs_by_rec[1: self.number_of_systems + 1],
             dataset["n_confs"],
         )
         # length: n_conformers
@@ -335,7 +335,7 @@ class TorchDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
         """
         Return the number of records in the TorchDataset.
         """
-        return self.number_of_records
+        return self.number_of_systems
 
     def get_series_mol_idxs(self, record_idx: int) -> List[int]:
         """

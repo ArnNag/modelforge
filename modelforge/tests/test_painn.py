@@ -19,7 +19,7 @@ def test_forward(single_batch_with_batchsize_64):
     assert painn is not None, "PaiNN model should be initialized."
 
     nnp_input = single_batch_with_batchsize_64.nnp_input.to(dtype=torch.float32)
-    energy = painn(nnp_input)["per_molecule_energy"]
+    energy = painn(nnp_input)["per_conformation_energy"]
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     assert (

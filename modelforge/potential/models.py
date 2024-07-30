@@ -707,7 +707,7 @@ class PostProcessing(torch.nn.Module):
     """
 
     _SUPPORTED_PROPERTIES = ["per_atom_energy", "general_postprocessing_operation"]
-    _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_molecule_reduction"]
+    _SUPPORTED_OPERATIONS = ["normalize", "from_atom_to_conformation_reduction"]
 
     def __init__(
         self,
@@ -779,7 +779,7 @@ class PostProcessing(torch.nn.Module):
         """
 
         from .processing import (
-            FromAtomToMoleculeReduction,
+            FromAtomToConformationReduction,
             ScaleValues,
             CalculateAtomicSelfEnergy,
         )
@@ -814,19 +814,19 @@ class PostProcessing(torch.nn.Module):
                     )
                     prostprocessing_sequence_names.append("normalize")
                 # check if also reduction is requested
-                if operations.get("from_atom_to_molecule_reduction", False):
+                if operations.get("from_atom_to_conformation_reduction", False):
                     postprocessing_sequence.append(
-                        FromAtomToMoleculeReduction(
+                        FromAtomToConformationReduction(
                             per_atom_property_name="per_atom_energy",
                             index_name="atomic_subsystem_indices",
-                            output_name="per_molecule_energy",
+                            output_name="per_conformation_energy",
                             keep_per_atom_property=operations.get(
                                 "keep_per_atom_property", False
                             ),
                         )
                     )
                     prostprocessing_sequence_names.append(
-                        "from_atom_to_molecule_reduction"
+                        "from_atom_to_conformation_reduction"
                     )
             elif property == "general_postprocessing_operation":
                 # check if also self-energies are requested
@@ -848,10 +848,10 @@ class PostProcessing(torch.nn.Module):
                         )
 
                         postprocessing_sequence.append(
-                            FromAtomToMoleculeReduction(
+                            FromAtomToConformationReduction(
                                 per_atom_property_name="ase_tensor",
                                 index_name="atomic_subsystem_indices",
-                                output_name="per_molecule_self_energy",
+                                output_name="per_conformation_self_energy",
                             )
                         )
 
@@ -949,7 +949,7 @@ class BaseNetwork(Module):
 
         # Prefix to remove
         prefix = "model."
-        excluded_keys = ["loss.per_molecule_energy", "loss.per_atom_force"]
+        excluded_keys = ["loss.per_conformation_energy", "loss.per_atom_force"]
 
         # Create a new dictionary without the prefix in the keys if prefix exists
         if any(key.startswith(prefix) for key in state_dict.keys()):

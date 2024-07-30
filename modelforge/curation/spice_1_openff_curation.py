@@ -65,7 +65,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
     def _init_dataset_parameters(self):
         self.qcarchive_server = "ml.qcarchive.molssi.org"
 
-        self.molecule_names = {}
+        self.system_names = {}
 
         # dictionary of properties and their input units (i.e., those from QCArchive)
         # and desired output units; unit conversion is performed if convert_units = True
@@ -495,8 +495,8 @@ class SPICE1OpenFFCuration(DatasetCuration):
                     name = key.split("-")[0]
                     # if we haven't processed a molecule with this name yet
                     # we will add to the molecule_names dictionary
-                    if name not in self.molecule_names.keys():
-                        self.molecule_names[name] = len(self.data)
+                    if name not in self.system_names.keys():
+                        self.system_names[name] = len(self.data)
 
                         data_temp = {}
                         data_temp["name"] = name
@@ -534,7 +534,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
                     else:
                         # if we have already encountered this molecule we need to append to the data
                         # since we are using numpy we will use vstack to append to the arrays
-                        index = self.molecule_names[name]
+                        index = self.system_names[name]
 
                         self.data[index]["n_configs"] += 1
                         self.data[index]["geometry"] = np.vstack(
@@ -553,7 +553,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
                     name = key.split("-")[0]
                     val = spice_db[original_name[key]]
 
-                    index = self.molecule_names[name]
+                    index = self.system_names[name]
 
                     # note, we will use the convention of names being lowercase
                     # and spaces denoted by underscore
@@ -619,7 +619,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
                 for key in tqdm(sorted_keys):
                     name = key.split("-")[0]
                     val = spice_db[original_name[key]]
-                    index = self.molecule_names[name]
+                    index = self.system_names[name]
 
                     # typecasting issue in there
 
@@ -832,7 +832,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
                         )
         logger.debug(f"Data fetched.")
         self._clear_data()
-        self.molecule_names.clear()
+        self.system_names.clear()
         logger.debug(f"Processing downloaded dataset.")
 
         if limit_atomic_species is not None:

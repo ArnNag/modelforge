@@ -282,7 +282,7 @@ from modelforge.dataset.dataset import BatchData
 @pytest.fixture
 def methane() -> BatchData:
     """
-    Generate a methane molecule input for testing.
+    Generate a methane conformation input for testing.
 
     Returns
     -------

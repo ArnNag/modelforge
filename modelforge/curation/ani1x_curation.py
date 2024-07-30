@@ -248,8 +248,8 @@ class ANI1xCuration(DatasetCuration):
         local_path_dir: str,
         name: str,
         max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
+            max_conformations_per_system: Optional[int] = None,
+            total_conformations: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -263,10 +263,10 @@ class ANI1xCuration(DatasetCuration):
         max_records: int, optional, default=None
             If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
             Can be used in conjunction with max_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
+        max_conformations_per_system: int, optional, default=None
             If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
             Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
+        total_conformations: int, optional, default=None
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with max_records and max_conformers_per_record.
 
@@ -307,27 +307,25 @@ class ANI1xCuration(DatasetCuration):
             elif max_records is not None:
                 n_max = max_records
 
-            conformers_counter = 0
+            conformations_counter = 0
 
             for i, name in tqdm(enumerate(names[0:n_max]), total=n_max):
-                if total_conformers is not None:
-                    if conformers_counter >= total_conformers:
+                if total_conformations is not None:
+                    if conformations_counter >= total_conformations:
                         break
 
-                # Extract the total number of configurations for a given molecule
+                # Extract the total number of conformations for a given system
 
-                if max_conformers_per_record is not None:
-                    conformers_per_molecule = min(
-                        hf[name]["coordinates"].shape[0], max_conformers_per_record
+                if max_conformations_per_system is not None:
+                    conformations_per_system = min(
+                        hf[name]["coordinates"].shape[0], max_conformations_per_system
                     )
                 else:
-                    conformers_per_molecule = hf[name]["coordinates"].shape[0]
+                    conformations_per_system = hf[name]["coordinates"].shape[0]
 
-                if total_conformers is not None:
-                    if conformers_counter + conformers_per_molecule > total_conformers:
-                        conformers_per_molecule = total_conformers - conformers_counter
-
-                n_configs = conformers_per_molecule
+                if total_conformations is not None:
+                    if conformations_counter + conformations_per_system > total_conformations:
+                        conformations_per_system = total_conformations - conformations_counter
 
                 keys_list = list(hf[name].keys())
 
@@ -338,7 +336,7 @@ class ANI1xCuration(DatasetCuration):
                 ani1x_temp["atomic_numbers"] = hf[name]["atomic_numbers"][()].reshape(
                     -1, 1
                 )
-                ani1x_temp["n_configs"] = n_configs
+                ani1x_temp["n_conformations"] = conformations_per_system
 
                 # param_in is the name of the entry, param_data contains input (u_in) and output (u_out) units
                 for param_in, param_data in self.qm_parameters.items():
@@ -351,7 +349,7 @@ class ANI1xCuration(DatasetCuration):
                     if param_in in add_new_axis:
                         temp = temp[..., newaxis]
 
-                    temp = temp[0:conformers_per_molecule]
+                    temp = temp[0:conformations_per_system]
 
                     param_unit = param_data["u_in"]
                     if param_unit is not None:
@@ -360,7 +358,7 @@ class ANI1xCuration(DatasetCuration):
                         ani1x_temp[param_out] = temp
 
                 self.data.append(ani1x_temp)
-                conformers_counter += conformers_per_molecule
+                conformations_counter += conformations_per_system
 
         if self.convert_units:
             self._convert_units()
@@ -428,8 +426,8 @@ class ANI1xCuration(DatasetCuration):
             self.local_cache_dir,
             self.name,
             max_records=max_records,
-            max_conformers_per_record=max_conformers_per_record,
-            total_conformers=total_conformers,
+            max_conformations_per_system=max_conformers_per_record,
+            total_conformations=total_conformers,
         )
 
         self._generate_hdf5()

@@ -30,20 +30,20 @@ def test_dict_to_hdf5(prep_temp_dir):
     file_path = str(prep_temp_dir)
     record_entries_series = {
         "name": "single",
-        "n_configs": "single",
+        "n_conformations": "single",
         "energy": "single",
         "geometry": "single",
     }
     test_data = [
         {
             "name": "test1",
-            "n_configs": 1,
+            "n_conformations": 1,
             "energy": 123 * unit.hartree,
             "geometry": np.array([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]) * unit.angstrom,
         },
         {
             "name": "test2",
-            "n_configs": 1,
+            "n_conformations": 1,
             "energy": 456 * unit.hartree,
             "geometry": np.array([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]) * unit.angstrom,
         },
@@ -74,7 +74,7 @@ def test_dict_to_hdf5(prep_temp_dir):
 
             for property in properties:
                 # validate properties name
-                assert property in ["n_configs", "energy", "geometry"]
+                assert property in ["n_conformations", "energy", "geometry"]
 
                 if "u" in hf[name][property].attrs:
                     u = hf[name][property].attrs["u"]
@@ -113,7 +113,7 @@ def test_dict_to_hdf5(prep_temp_dir):
     test_data = [
         {
             "name": "test1",
-            "n_configs": np.sum([1, 2]),
+            "n_conformations": np.sum([1, 2]),
             "energy": 123 * unit.hartree,
             "geometry": np.array([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]) * unit.angstrom,
         }
@@ -136,14 +136,14 @@ def test_series_dict_to_hdf5(prep_temp_dir):
     file_path = str(prep_temp_dir)
     record_entries_series = {
         "name": "single_rec",
-        "n_configs": "single_rec",
+        "n_conformations": "single_rec",
         "energy": "series_mol",
         "geometry": "series_atom",
     }
     test_data = [
         {
             "name": "test1",
-            "n_configs": 2,
+            "n_conformations": 2,
             "energy": np.array([123, 234]).reshape(2, 1) * unit.hartree,
             "geometry": np.array(
                 [[[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]], [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]]
@@ -177,16 +177,16 @@ def test_series_dict_to_hdf5(prep_temp_dir):
 
             for property in properties:
                 # validate properties name
-                assert property in ["n_configs", "energy", "geometry"]
+                assert property in ["n_conformations", "energy", "geometry"]
 
-            n_configs = hf[name]["n_configs"][()]
-            temp_record["n_configs"] = n_configs
+            n_conformations = hf[name]["n_conformations"][()]
+            temp_record["n_conformations"] = n_conformations
 
             for property in ["energy", "geometry"]:
                 format = hf[name][property].attrs["format"]
                 if format.split("_")[0] == "series":
                     temp = []
-                    for i in range(n_configs):
+                    for i in range(n_conformations):
                         temp.append(hf[name][property][i])
 
                     if "u" in hf[name][property].attrs:
@@ -538,19 +538,19 @@ def test_ani1_process_download_short(prep_temp_dir):
     assert len(ani1_data.data) == 2
     ani1_data._clear_data()
     ani1_data._process_downloaded(
-        str(local_data_path), hdf5_file, max_records=2, max_conformers_per_record=1
+        str(local_data_path), hdf5_file, max_records=2, max_conformations_per_system=1
     )
     assert ani1_data.total_conformers == 2
 
     ani1_data._clear_data()
     ani1_data._process_downloaded(
-        str(local_data_path), hdf5_file, max_records=3, max_conformers_per_record=2
+        str(local_data_path), hdf5_file, max_records=3, max_conformations_per_system=2
     )
     assert ani1_data.total_conformers > 3
 
     ani1_data._clear_data()
     ani1_data._process_downloaded(
-        str(local_data_path), hdf5_file, total_conformers=5, max_conformers_per_record=2
+        str(local_data_path), hdf5_file, total_conformations=5, max_conformations_per_system=2
     )
     assert ani1_data.total_conformers == 5
     with pytest.raises(Exception):
@@ -584,7 +584,7 @@ def test_ani1_process_download_no_conversion(prep_temp_dir):
         ani1_data.data[0]["atomic_numbers"]
         == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8).reshape(-1, 1)
     )
-    assert ani1_data.data[0]["n_configs"] == 2
+    assert ani1_data.data[0]["n_conformations"] == 2
 
     assert np.all(
         np.isclose(
@@ -925,7 +925,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
         ani1_data.data[0]["atomic_numbers"]
         == array([6, 1, 1, 1, 1, 7, 7, 7, 7, 8, 8, 8, 8], dtype=uint8).reshape(-1, 1)
     )
-    assert ani1_data.data[0]["n_configs"] == 2
+    assert ani1_data.data[0]["n_conformations"] == 2
 
     assert np.all(
         np.isclose(
@@ -1277,7 +1277,7 @@ def test_spice1_process_download_no_conversion(prep_temp_dir):
             ],
         ).reshape(-1, 1)
     )
-    assert spice_data.data[0]["n_configs"] == 50
+    assert spice_data.data[0]["n_conformations"] == 50
 
     assert np.all(
         np.isclose(
@@ -1431,7 +1431,7 @@ def test_spice1_process_download_conversion(prep_temp_dir):
             ],
         ).reshape(-1, 1)
     )
-    assert spice_data.data[0]["n_configs"] == 50
+    assert spice_data.data[0]["n_conformations"] == 50
 
     assert np.all(
         np.isclose(
@@ -1575,7 +1575,7 @@ def test_ani2x(prep_temp_dir):
 
     assert len(ani2x_dataset.data) == 1
     assert ani2x_dataset.data[0]["name"] == "[6_8]_m0"
-    assert ani2x_dataset.data[0]["n_configs"] == 457
+    assert ani2x_dataset.data[0]["n_conformations"] == 457
     assert ani2x_dataset.data[0]["energies"].shape == (457, 1)
     assert ani2x_dataset.data[0]["atomic_numbers"].shape == (2, 1)
     assert ani2x_dataset.data[0]["geometry"].shape == (457, 2, 3)
@@ -1849,7 +1849,7 @@ def test_spice_1_openff_process_datasets(prep_temp_dir):
 
     # note that when we fetch the data, all the records are conformers of the same molecule
     # so we only end up with one molecule in data, but with 10 conformers
-    assert sum([datapoint["n_configs"] for datapoint in spice_openff_data.data]) == 10
+    assert sum([datapoint["n_conformations"] for datapoint in spice_openff_data.data]) == 10
 
     assert spice_openff_data.data[0]["atomic_numbers"].shape == (32, 1)
     assert np.all(
@@ -2011,7 +2011,7 @@ def test_spice_2_process_datasets(prep_temp_dir):
 
     # note that when we fetch the data, all the records are conformers of the same molecule
     # so we only end up with one molecule in data, but with 10 conformers
-    assert sum([datapoint["n_configs"] for datapoint in spice_2_data.data]) == 10
+    assert sum([datapoint["n_conformations"] for datapoint in spice_2_data.data]) == 10
 
     assert spice_2_data.data[0]["atomic_numbers"].shape == (32, 1)
     assert spice_2_data.data[0]["dft_total_energy"].shape == (10, 1)

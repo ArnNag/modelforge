@@ -118,7 +118,7 @@ def test_forward_and_backward():
     ).to(device=device)
     energy = model(mf_input)
     derivative = torch.autograd.grad(
-        energy["per_molecule_energy"].sum(), mf_input.positions
+        energy["per_conformation_energy"].sum(), mf_input.positions
     )[0]
     per_atom_force = -derivative
 

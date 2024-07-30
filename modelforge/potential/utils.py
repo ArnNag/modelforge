@@ -209,10 +209,10 @@ class Embedding(nn.Module):
 from typing import Dict
 
 
-class AddPerMoleculeValue(nn.Module):
+class AddPerConformationValue(nn.Module):
     """
-    Module that adds a per-molecule value to a per-atom property tensor.
-    The per-molecule value is expanded to match th elength of the per-atom property tensor.
+    Module that adds a per-conformation value to a per-atom property tensor.
+    The per-molecule value is expanded to match the length of the per-atom property tensor.
 
     Parameters
     ----------
@@ -330,7 +330,7 @@ class FeaturizeInput(nn.Module):
 
     _SUPPORTED_FEATURIZATION_TYPES = [
         "atomic_number",
-        "per_molecule_total_charge",
+        "per_conformation_total_charge",
         "spin_state",
     ]
 
@@ -383,13 +383,13 @@ class FeaturizeInput(nn.Module):
                 self.registered_embedding_operations.append("nuclear_charge_embedding")
 
             # add total charge to embedding vector
-            if featurization == "per_molecule_total_charge" and featurization in list(
+            if featurization == "per_conformation_total_charge" and featurization in list(
                 featurization_config["properties_to_featurize"]
             ):
 
                 # transform output o f embedding with shape (nr_atoms, nr_features) to (nr_atoms, nr_features + 1). The added features is the total charge (which will be transformed to a per-atom property)
                 self.append_to_embedding_tensor.append(
-                    AddPerMoleculeValue("total_charge")
+                    AddPerConformationValue("total_charge")
                 )
                 self.increase_dim_of_embedded_tensor += 1
                 self.registered_appended_properties.append("total_charge")
