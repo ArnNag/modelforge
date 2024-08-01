@@ -100,14 +100,14 @@ def calculate_mean_and_variance(
     """
     from loguru import logger as log
     from modelforge.utils.misc import Welford
-    from modelforge.dataset.dataset import collate_conformers
+    from modelforge.dataset.dataset import collate_conformations
 
     online_estimator = Welford()
     nr_of_atoms = 0
     dataloader = DataLoader(
         torch_dataset,
         batch_size=batch_size,
-        collate_fn=collate_conformers,
+        collate_fn=collate_conformations,
         num_workers=4,
     )
     import tqdm
@@ -320,9 +320,9 @@ class RandomSplittingStrategy(SplittingStrategy):
         return (train_d, val_d, test_d)
 
 
-class RandomRecordSplittingStrategy(SplittingStrategy):
+class RandomSystemSplittingStrategy(SplittingStrategy):
     """
-    Strategy to split a dataset randomly, keeping all conformers in a record in the same split.
+    Strategy to split a dataset randomly, keeping all conformations in a system in the same split.
 
     """
 
@@ -347,7 +347,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
         Examples
         --------
         >>> dataset = [1, 2, 3, 4, 5]
-        >>> random_split = RandomRecordSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
+        >>> random_split = RandomSystemSplittingStrategy(seed=123, split=[0.7, 0.2, 0.1])
         >>> train_idx, val_idx, test_idx = random_split.split(dataset)
         """
 
@@ -382,7 +382,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
             f"Splitting dataset into {self.train_size}, {self.val_size}, {self.test_size} ..."
         )
 
-        train_d, val_d, test_d = random_record_split(
+        train_d, val_d, test_d = random_system_split(
             dataset,
             lengths=[self.train_size, self.val_size, self.test_size],
             generator=self.generator,
@@ -391,13 +391,13 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
         return (train_d, val_d, test_d)
 
 
-def random_record_split(
+def random_system_split(
     dataset: "TorchDataset",
     lengths: List[Union[int, float]],
     generator: Optional[torch.Generator] = torch.default_generator,
 ) -> List[Subset]:
     """
-    Randomly split a TorchDataset into non-overlapping new datasets of given lengths, keeping all conformers in a record in the same split
+    Randomly split a TorchDataset into non-overlapping new datasets of given lengths, keeping all conformations in a system in the same split
 
     If a list of fractions that sum up to 1 is given,
     the lengths will be computed automatically as
@@ -511,6 +511,6 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
 
 REGISTERED_SPLITTING_STRATEGIES = {
     "first_come_first_serve": FirstComeFirstServeSplittingStrategy,
-    "random_record_splitting_strategy": RandomRecordSplittingStrategy,
-    "random_conformer_splitting_strategy": RandomSplittingStrategy,
+    "random_record_splitting_strategy": RandomSystemSplittingStrategy,
+    "random_conformation_splitting_strategy": RandomSplittingStrategy,
 }

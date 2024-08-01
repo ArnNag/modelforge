@@ -66,11 +66,11 @@ def qm9_wrapper(
     qm9.process(
         force_download=force_download,
         max_records=max_records,
-        max_conformers_per_record=max_conformers_per_record,
+        max_conformations_per_system=max_conformers_per_record,
         total_conformers=total_conformers,
     )
-    print(f"Total records: {qm9.total_records}")
-    print(f"Total conformers: {qm9.total_conformers}")
+    print(f"Total records: {qm9.total_systems}")
+    print(f"Total conformers: {qm9.total_conformations}")
 
 
 def main():

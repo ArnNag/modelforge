@@ -68,7 +68,7 @@ class SplittingStrategyName(str, Enum):
 
     first_come_first_serve = "first_come_first_serve"
     random_record_splitting_strategy = "random_record_splitting_strategy"
-    random_conformer_splitting_strategy = "random_conformer_splitting_strategy"
+    random_conformation_splitting_strategy = "random_conformation_splitting_strategy"
 
 
 class AnnealingStrategy(str, Enum):

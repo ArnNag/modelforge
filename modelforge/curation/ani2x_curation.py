@@ -9,7 +9,8 @@ class ANI2xCuration(DatasetCuration):
     Routines to fetch and process the ANI-2x dataset into a curated hdf5 file.
 
     The ANI-2x data set includes properties for small organic molecules that contain
-    H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 20,000 molecules.
+    H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformations for nearly 20,000 systems. (All systems
+    contain one molecule.)
     This will fetch data generated with the wB97X/631Gd level of theory
     used in the original ANI-2x paper, calculated using Gaussian 09
 
@@ -93,14 +94,15 @@ class ANI2xCuration(DatasetCuration):
         """
         Init the dictionary that defines the format of the data.
 
-        For data efficiency, information for different conformers will be grouped together
-        To make it clear to the dataset loader which pieces of information are common to all
-        conformers or which quantities are series (i.e., have different values for each conformer).
-        These labels will also allow us to define whether a given entry is per-atom, per-molecule,
-        or is a scalar/string that applies to the entire record.
+        For data efficiency, information for different conformations of the same system will be grouped together
+        to make it clear to the dataset loader which pieces of information are common to all
+        conformations or which quantities are series (i.e., have different values for each conformation).
+        These labels will also allow us to define whether a given entry is per-atom, per-conformation,
+        or is a scalar/string that applies to the entire system.
+
         Options include:
         single_rec, e.g., name, n_conformations, smiles
-        single_atom, e.g., atomic_numbers (these are the same for all conformers)
+        single_atom, e.g., atomic_numbers (these are the same for all conformations)
         single_mol, e.g., reference energy
         series_atom, e.g., charges
         series_mol, e.g., dft energy, dipole moment, etc.
@@ -123,9 +125,9 @@ class ANI2xCuration(DatasetCuration):
         self,
         local_path_dir: str,
         name: str,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
+            max_systems: Optional[int] = None,
+            max_conformations_per_system: Optional[int] = None,
+            total_conformations: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -136,16 +138,15 @@ class ANI2xCuration(DatasetCuration):
             Path to the directory that contains the raw hdf5 datafile
         name: str, required
             Name of the raw hdf5 file,
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records or total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with  max_conformers_per_record.
-
+        max_systems: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' systems, useful for unit tests.
+            Can be used in conjunction with max_conformers_per_record and total_conformers.
+        max_conformations_per_system: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformations per systems, useful for unit tests.
+            Can be used in conjunction with max_records and total_conformers.
+        total_conformations: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformations in total, useful for unit tests.
+            Can be used in conjunction with max_records and max_conformers_per_record.
 
         Examples
         --------
@@ -169,14 +170,15 @@ class ANI2xCuration(DatasetCuration):
                 energies = properties["energies"][:]
                 forces = properties["forces"][:]
 
-                # in the HDF5 file provided for the ANI2x data set,  all conformers of the same size are grouped
-                # together into a single array, even if they correspond to different molecules.
-                # As a reasonable way to break these up, we species array to identify unique molecules.
-                # This assumes that the species array is a unique way to define a molecule, which of course
+                # in the HDF5 file provided for the ANI2x data set, all conformations of the same size are grouped
+                # together into a single array, even if they correspond to different systems.
+                # As a reasonable way to break these up, we use the species array to identify unique systems,
+                # this assumes that the species array is a unique way to define a system, which of course
                 # may not be true, e.g., isomers, etc. (although, if generated from SMILES they will more than likely
                 # be in a different order). However, this is a reasonable way to subdivide the dataset.
                 # I'll note that this is purely a data organization issue, and not a problem with the data itself,
                 # and ultimately will not affect the results of training with this model.
+                # TODO: aren't isomers the same system, making this a non-issue?
 
                 import numpy as np
 
@@ -199,11 +201,11 @@ class ANI2xCuration(DatasetCuration):
                         molecules[molecule_name] = [i]
                         last = species[i]
 
-                if max_records is None:
+                if max_systems is None:
                     n_max = len(molecules)
                 else:
-                    n_max = min(max_records, len(molecules))
-                    max_records -= n_max
+                    n_max = min(max_systems, len(molecules))
+                    max_systems -= n_max
 
                 if n_max == 0:
                     break
@@ -213,8 +215,8 @@ class ANI2xCuration(DatasetCuration):
                 ):
                     # stop processing if we have reached the total number of conformers
 
-                    if total_conformers is not None:
-                        if conformers_counter >= total_conformers:
+                    if total_conformations is not None:
+                        if conformers_counter >= total_conformations:
                             break
 
                     ds_temp = {}
@@ -225,14 +227,14 @@ class ANI2xCuration(DatasetCuration):
                     ds_temp["atomic_numbers"] = species[base_index].reshape(-1, 1)
 
                     conformers_per_molecule = len(molecules[molecule_name])
-                    if max_conformers_per_record is not None:
+                    if max_conformations_per_system is not None:
                         conformers_per_molecule = min(
-                            conformers_per_molecule, max_conformers_per_record
+                            conformers_per_molecule, max_conformations_per_system
                         )
-                    if total_conformers is not None:
+                    if total_conformations is not None:
                         conformers_per_molecule = min(
                             conformers_per_molecule,
-                            total_conformers - conformers_counter,
+                            total_conformations - conformers_counter,
                         )
                     ds_temp["n_conformations"] = conformers_per_molecule
 
@@ -256,9 +258,9 @@ class ANI2xCuration(DatasetCuration):
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
+            max_systems: Optional[int] = None,
+            max_conformations_per_system: Optional[int] = None,
+            total_conformations: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -268,13 +270,13 @@ class ANI2xCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
+        max_systems: int, optional, default=None
             If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
             Can be used in conjunction with max_conformers_per_record.
-        max_conformers_per_record: int, optional, default=None
+        max_conformations_per_system: int, optional, default=None
             If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
             Can be used in conjunction with max_records or total_conformers.
-        total_conformers: int, optional, default=None
+        total_conformations: int, optional, default=None
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with  max_conformers_per_record.
 
@@ -286,9 +288,9 @@ class ANI2xCuration(DatasetCuration):
         >>> ani2_data.process()
 
         """
-        if max_records is not None and total_conformers is not None:
+        if max_systems is not None and total_conformations is not None:
             raise Exception(
-                "max_records and total_conformers cannot be set at the same time."
+                "max_systems and total_conformations cannot be set at the same time."
             )
 
         from modelforge.utils.remote import download_from_zenodo
@@ -326,9 +328,9 @@ class ANI2xCuration(DatasetCuration):
         self._process_downloaded(
             f"{self.local_cache_dir}/final_h5/",
             hdf5_filename,
-            max_records,
-            max_conformers_per_record,
-            total_conformers,
+            max_systems,
+            max_conformations_per_system,
+            total_conformations,
         )
 
         self._generate_hdf5()

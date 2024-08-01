@@ -128,11 +128,12 @@ class SPICE1OpenFFCuration(DatasetCuration):
         """
         Init the dictionary that defines the format of the data.
 
-        For data efficiency, information for different conformers will be grouped together
-        To make it clear to the dataset loader which pieces of information are common to all
-        conformers or which quantities are series (i.e., have different values for each conformer).
-        These labels will also allow us to define whether a given entry is per-atom, per-molecule,
-        or is a scalar/string that applies to the entire record.
+        For data efficiency, information for different conformations of the same system will be grouped together
+        to make it clear to the dataset loader which pieces of information are common to all
+        conformations or which quantities are series (i.e., have different values for each conformation).
+        These labels will also allow us to define whether a given entry is per-atom, per-conformation,
+        or is a scalar/string that applies to the entire system.
+
         Options include:
         single_rec, e.g., name, n_configs, smiles
         single_atom, e.g., atomic_numbers (these are the same for all conformers)
@@ -741,7 +742,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
         self,
         force_download: bool = False,
         max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
+            max_conformations_per_system: Optional[int] = None,
         total_conformers: Optional[int] = None,
         limit_atomic_species: Optional[list] = None,
         n_threads=6,
@@ -758,7 +759,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
             If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
             Can be used in conjunction with max_conformers_per_record and total_conformers.
             Note defining this will only fetch from the "SPICE PubChem Set 1 Single Points Dataset v1.2"
-        max_conformers_per_record: int, optional, default=None
+        max_conformations_per_system: int, optional, default=None
             If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
             Can be used in conjunction with max_records and total_conformers.
         total_conformers: int, optional, default=None
@@ -850,7 +851,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
             self.local_cache_dir,
             local_database_names,
             dataset_names,
-            max_conformers_per_record=max_conformers_per_record,
+            max_conformers_per_record=max_conformations_per_system,
             total_conformers=total_conformers,
             atomic_numbers_to_limit=self.atomic_numbers_to_limit,
         )

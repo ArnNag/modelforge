@@ -599,7 +599,7 @@ def test_dataset_generation(dataset_name, datamodule_factory):
 
 
 from modelforge.dataset.utils import (
-    RandomRecordSplittingStrategy,
+    RandomSystemSplittingStrategy,
     RandomSplittingStrategy,
     FirstComeFirstServeSplittingStrategy,
 )
@@ -610,7 +610,7 @@ from modelforge.dataset.utils import (
     [
         RandomSplittingStrategy,
         FirstComeFirstServeSplittingStrategy,
-        RandomRecordSplittingStrategy,
+        RandomSystemSplittingStrategy,
     ],
 )
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -664,7 +664,7 @@ def test_dataset_splitting(
         assert np.isclose(len(train_dataset2) / total, 0.6, atol=0.01)
         assert np.isclose(len(val_dataset2) / total, 0.3, atol=0.01)
         assert np.isclose(len(test_dataset2) / total, 0.1, atol=0.01)
-    elif splitting_strategy == RandomRecordSplittingStrategy:
+    elif splitting_strategy == RandomSystemSplittingStrategy:
         # for the random record splitting we need to have a larger tolerance
         # as we are not guaranteed to get the exact split since the number of conformers per record is not fixed
         total = len(train_dataset2) + len(val_dataset2) + len(test_dataset2)

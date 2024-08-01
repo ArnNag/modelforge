@@ -63,13 +63,13 @@ def PhAlkEthOH_openff_wrapper(
     PhAlkEthOH_dataset.process(
         force_download=force_download,
         max_records=max_records,
-        max_conformers_per_record=max_conformers_per_record,
+        max_conformations_per_system=max_conformers_per_record,
         total_conformers=total_conformers,
         limit_atomic_species=limit_atomic_species,
         n_threads=1,
     )
-    print(f"Total records: {PhAlkEthOH_dataset.total_records}")
-    print(f"Total conformers: {PhAlkEthOH_dataset.total_conformers}")
+    print(f"Total records: {PhAlkEthOH_dataset.total_systems}")
+    print(f"Total conformers: {PhAlkEthOH_dataset.total_conformations}")
 
 
 def main():

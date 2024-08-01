@@ -79,14 +79,14 @@ def spice_114_openff_wrapper(
     )
     spice_dataset.process(
         force_download=force_download,
-        max_records=max_records,
-        max_conformers_per_record=max_conformers_per_record,
-        total_conformers=total_conformers,
+        max_systems=max_records,
+        max_conformations_per_system=max_conformers_per_record,
+        total_conformations=total_conformers,
         limit_atomic_species=limit_atomic_species,
         n_threads=6,
     )
-    print(f"Total records: {spice_dataset.total_records}")
-    print(f"Total conformers: {spice_dataset.total_conformers}")
+    print(f"Total records: {spice_dataset.total_systems}")
+    print(f"Total conformers: {spice_dataset.total_conformations}")
 
 
 def main():

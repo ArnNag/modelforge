@@ -9,7 +9,7 @@ from loguru import logger as log
 from openff.units import Quantity
 from torch.utils.data import DataLoader
 
-from modelforge.dataset.utils import RandomRecordSplittingStrategy, SplittingStrategy
+from modelforge.dataset.utils import RandomSystemSplittingStrategy, SplittingStrategy
 from modelforge.utils.prop import PropertyNames
 
 if TYPE_CHECKING:
@@ -1030,7 +1030,7 @@ class DataModule(pl.LightningDataModule):
             "SPICE114_OPENFF",
             "PhAlkEthOH",
         ],
-        splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
+            splitting_strategy: SplittingStrategy = RandomSystemSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
         atomic_self_energies: Optional[Dict[str, float]] = None,
@@ -1294,7 +1294,7 @@ class DataModule(pl.LightningDataModule):
         from modelforge.dataset.utils import _calculate_self_energies
 
         # Define the collate function based on the `collate` parameter
-        collate_fn = collate_conformers if collate else None
+        collate_fn = collate_conformations if collate else None
         return _calculate_self_energies(
             torch_dataset=torch_dataset, collate_fn=collate_fn
         )
@@ -1341,7 +1341,7 @@ class DataModule(pl.LightningDataModule):
             DataLoader(
                 dataset,
                 batch_size=500,
-                collate_fn=collate_conformers,
+                collate_fn=collate_conformations,
                 num_workers=4,
                 shuffle=False,
                 pin_memory=False,
@@ -1379,7 +1379,7 @@ class DataModule(pl.LightningDataModule):
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
-            collate_fn=collate_conformers,
+            collate_fn=collate_conformations,
             num_workers=num_workers,
             shuffle=shuffle,
             pin_memory=pin_memory,
@@ -1397,7 +1397,7 @@ class DataModule(pl.LightningDataModule):
         return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
-            collate_fn=collate_conformers,
+            collate_fn=collate_conformations,
             num_workers=num_workers,
         )
 
@@ -1411,14 +1411,14 @@ class DataModule(pl.LightningDataModule):
             DataLoader containing the test dataset.
         """
         return DataLoader(
-            self.test_dataset, batch_size=self.batch_size, collate_fn=collate_conformers
+            self.test_dataset, batch_size=self.batch_size, collate_fn=collate_conformations
         )
 
 
 from typing import Tuple
 
 
-def collate_conformers(conf_list: List[BatchData]) -> BatchData:
+def collate_conformations(conf_list: List[BatchData]) -> BatchData:
     """Collate a list of BatchData instances with one conformer each into a single BatchData instance."""
     atomic_numbers_list = []
     positions_list = []

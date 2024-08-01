@@ -194,14 +194,15 @@ class ANI1xCuration(DatasetCuration):
         """
         Init the dictionary that defines the format of the data.
 
-        For data efficiency, information for different conformers will be grouped together
-        To make it clear to the dataset loader which pieces of information are common to all
-        conformers or which quantities are series (i.e., have different values for each conformer).
-        These labels will also allow us to define whether a given entry is per-atom, per-molecule,
-        or is a scalar/string that applies to the entire record.
+        For data efficiency, information for different conformations of the same system will be grouped together
+        to make it clear to the dataset loader which pieces of information are common to all
+        conformations or which quantities are series (i.e., have different values for each conformation).
+        These labels will also allow us to define whether a given entry is per-atom, per-conformation,
+        or is a scalar/string that applies to the entire system.
+
         Options include:
         single_rec, e.g., name, n_configs, smiles
-        single_atom, e.g., atomic_numbers (these are the same for all conformers)
+        single_atom, e.g., atomic_numbers (these are the same for all conformations)
         single_mol, e.g., reference energy
         series_atom, e.g., charges
         series_mol, e.g., dft energy, dipole moment, etc.
@@ -247,7 +248,7 @@ class ANI1xCuration(DatasetCuration):
         self,
         local_path_dir: str,
         name: str,
-        max_records: Optional[int] = None,
+            max_systems: Optional[int] = None,
             max_conformations_per_system: Optional[int] = None,
             total_conformations: Optional[int] = None,
     ):
@@ -260,15 +261,15 @@ class ANI1xCuration(DatasetCuration):
             Path to the directory that contains the raw hdf5 datafile
         name: str, required
             Name of the raw hdf5 file,
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record and total_conformers.
+        max_systems: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' systems, useful for unit tests.
+            Can be used in conjunction with max_conformations_per_system and total_conformations.
         max_conformations_per_system: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformations per system, useful for unit tests.
+            Can be used in conjunction with max_systems or total_conformations.
         total_conformations: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformations in total, useful for unit tests.
+            Can be used in conjunction with max_systems and max_conformations_per_system.
 
         Examples
         --------
@@ -302,10 +303,10 @@ class ANI1xCuration(DatasetCuration):
         }
         with h5py.File(input_file_name, "r") as hf:
             names = list(hf.keys())
-            if max_records is None:
+            if max_systems is None:
                 n_max = len(names)
-            elif max_records is not None:
-                n_max = max_records
+            elif max_systems is not None:
+                n_max = max_systems
 
             conformations_counter = 0
 
@@ -371,9 +372,9 @@ class ANI1xCuration(DatasetCuration):
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
+            max_systems: Optional[int] = None,
+            max_conformations_per_system: Optional[int] = None,
+            total_conformations: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -383,13 +384,13 @@ class ANI1xCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
+        max_systems: int, optional, default=None
             If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
             Can be used in conjunction with max_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
+        max_conformations_per_system: int, optional, default=None
             If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
             Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
+        total_conformations: int, optional, default=None
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with max_records and max_conformers_per_record.
 
@@ -400,9 +401,9 @@ class ANI1xCuration(DatasetCuration):
         >>> ani1_data.process()
 
         """
-        if max_records is not None and total_conformers is not None:
+        if max_systems is not None and total_conformations is not None:
             raise Exception(
-                "max_records and total_conformers cannot be set at the same time."
+                "max_records and total_conformations cannot be set at the same time."
             )
 
         from modelforge.utils.remote import download_from_figshare
@@ -425,9 +426,9 @@ class ANI1xCuration(DatasetCuration):
         self._process_downloaded(
             self.local_cache_dir,
             self.name,
-            max_records=max_records,
-            max_conformations_per_system=max_conformers_per_record,
-            total_conformations=total_conformers,
+            max_systems=max_systems,
+            max_conformations_per_system=max_conformations_per_system,
+            total_conformations=total_conformations,
         )
 
         self._generate_hdf5()

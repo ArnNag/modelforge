@@ -367,7 +367,7 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     assert data_dict_temp["smiles_b3lyp"] == "C"
     assert data_dict_temp["inchi_corina"] == "1S/CH4/h1H4"
     assert data_dict_temp["inchi_b3lyp"] == "1S/CH4/h1H4"
-    # per molecule property, shape [m,3]
+    # per molecule property, shape [m,3] # TODO: is this conformation or system?
     assert np.all(
         data_dict_temp["rotational_constants"]
         == np.array([[157.7118, 157.70997, 157.70699]]) * unit.gigahertz
@@ -478,16 +478,16 @@ def test_qm9_local_archive(prep_temp_dir):
 
     qm9_data._process_downloaded(str(prep_temp_dir), total_conformers=5)
     assert len(qm9_data.data) == 5
-    assert qm9_data.total_conformers == 5
+    assert qm9_data.total_conformations == 5
     # only one conformer per record so these should be the same
-    assert qm9_data.total_records == 5
+    assert qm9_data.total_systems == 5
 
     qm9_data._clear_data()
     qm9_data._process_downloaded(
         str(prep_temp_dir),
         total_conformers=5,
     )
-    assert qm9_data.total_conformers == 5
+    assert qm9_data.total_conformations == 5
     assert len(qm9_data.data) == 5
 
 
@@ -534,27 +534,27 @@ def test_ani1_process_download_short(prep_temp_dir):
     assert len(ani1_data.data) == 0
 
     # test max records exclusion
-    ani1_data._process_downloaded(str(local_data_path), hdf5_file, max_records=2)
+    ani1_data._process_downloaded(str(local_data_path), hdf5_file, max_systems=2)
     assert len(ani1_data.data) == 2
     ani1_data._clear_data()
     ani1_data._process_downloaded(
-        str(local_data_path), hdf5_file, max_records=2, max_conformations_per_system=1
+        str(local_data_path), hdf5_file, max_systems=2, max_conformations_per_system=1
     )
-    assert ani1_data.total_conformers == 2
+    assert ani1_data.total_conformations == 2
 
     ani1_data._clear_data()
     ani1_data._process_downloaded(
-        str(local_data_path), hdf5_file, max_records=3, max_conformations_per_system=2
+        str(local_data_path), hdf5_file, max_systems=3, max_conformations_per_system=2
     )
-    assert ani1_data.total_conformers > 3
+    assert ani1_data.total_conformations > 3
 
     ani1_data._clear_data()
     ani1_data._process_downloaded(
         str(local_data_path), hdf5_file, total_conformations=5, max_conformations_per_system=2
     )
-    assert ani1_data.total_conformers == 5
+    assert ani1_data.total_conformations == 5
     with pytest.raises(Exception):
-        ani1_data.process(max_records=10, total_conformers=5)
+        ani1_data.process(max_systems=10, total_conformations=5)
 
 
 def test_ani1_process_download_no_conversion(prep_temp_dir):
@@ -575,7 +575,7 @@ def test_ani1_process_download_no_conversion(prep_temp_dir):
     file_name_path = str(local_data_path) + "/" + hdf5_file
     assert os.path.isfile(file_name_path)
 
-    ani1_data._process_downloaded(str(local_data_path), hdf5_file, max_records=1)
+    ani1_data._process_downloaded(str(local_data_path), hdf5_file, max_systems=1)
 
     #
 
@@ -916,7 +916,7 @@ def test_an1_process_download_unit_conversion(prep_temp_dir):
     file_name_path = str(local_data_path) + "/" + hdf5_file
     assert os.path.isfile(file_name_path)
 
-    ani1_data._process_downloaded(str(local_data_path), hdf5_file, max_records=1)
+    ani1_data._process_downloaded(str(local_data_path), hdf5_file, max_systems=1)
 
     #
 
@@ -1524,27 +1524,27 @@ def test_spice1_process_download_conversion(prep_temp_dir):
     spice_data._process_downloaded(
         str(local_data_path), hdf5_file, max_records=1, max_conformers_per_record=1
     )
-    assert spice_data.total_conformers == 1
+    assert spice_data.total_conformations == 1
 
     spice_data._clear_data()
     spice_data._process_downloaded(
         str(local_data_path), hdf5_file, max_records=2, max_conformers_per_record=1
     )
-    assert spice_data.total_conformers == 2
+    assert spice_data.total_conformations == 2
 
     spice_data._clear_data()
     spice_data._process_downloaded(
         str(local_data_path), hdf5_file, total_conformers=4, max_conformers_per_record=2
     )
-    assert spice_data.total_conformers == 4
-    assert spice_data.total_records == 2
+    assert spice_data.total_conformations == 4
+    assert spice_data.total_systems == 2
 
     spice_data._clear_data()
 
     spice_data._process_downloaded(
         str(local_data_path), hdf5_file, max_records=1, max_conformers_per_record=1
     )
-    assert spice_data.total_conformers == 1
+    assert spice_data.total_conformations == 1
 
     with pytest.raises(Exception):
         spice_data.process(max_records=2, total_conformers=1)
@@ -1571,7 +1571,7 @@ def test_ani2x(prep_temp_dir):
         output_file_dir=local_path_dir,
         local_cache_dir=local_path_dir,
     )
-    ani2x_dataset._process_downloaded(local_data_path, filename, max_records=1)
+    ani2x_dataset._process_downloaded(local_data_path, filename, max_systems=1)
 
     assert len(ani2x_dataset.data) == 1
     assert ani2x_dataset.data[0]["name"] == "[6_8]_m0"
@@ -1604,16 +1604,16 @@ def test_ani2x(prep_temp_dir):
     )
 
     ani2x_dataset._clear_data()
-    ani2x_dataset._process_downloaded(local_data_path, filename, total_conformers=10)
-    assert ani2x_dataset.total_conformers == 10
+    ani2x_dataset._process_downloaded(local_data_path, filename, total_conformations=10)
+    assert ani2x_dataset.total_conformations == 10
 
     ani2x_dataset._clear_data()
     ani2x_dataset._process_downloaded(
-        local_data_path, filename, max_records=2, max_conformers_per_record=2
+        local_data_path, filename, max_systems=2, max_conformations_per_system=2
     )
-    assert ani2x_dataset.total_conformers > 2
+    assert ani2x_dataset.total_conformations > 2
     with pytest.raises(Exception):
-        ani2x_dataset.process(max_records=2, total_conformers=1)
+        ani2x_dataset.process(max_systems=2, total_conformations=1)
 
 
 def test_spice1_openff_test_fetching(prep_temp_dir):

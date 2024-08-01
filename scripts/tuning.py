@@ -10,7 +10,7 @@ ASHAScheduler = import_("ray").tune.schedulers.ASHAScheduler
 from modelforge.potential import NeuralNetworkPotentialFactory
 from modelforge.dataset.qm9 import QM9Dataset
 from modelforge.dataset.dataset import DataModule
-from modelforge.dataset.utils import RandomRecordSplittingStrategy
+from modelforge.dataset.utils import RandomSystemSplittingStrategy
 from pytorch_lightning.loggers import TensorBoardLogger
 
 # set up tensor board logger
@@ -19,7 +19,7 @@ logger = TensorBoardLogger("tb_logs", name="training")
 # Set up and prepare dataset
 data = QM9Dataset()
 dataset = DataModule(
-    data, batch_size=512, splitting_strategy=RandomRecordSplittingStrategy()
+    data, batch_size=512, splitting_strategy=RandomSystemSplittingStrategy()
 )
 
 dataset.prepare_data(remove_self_energies=True, normalize=False)

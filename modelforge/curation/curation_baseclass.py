@@ -13,7 +13,7 @@ def dict_to_hdf5(
 
     This will include units as attributes for each quantity (if defined as openff-units quantities ) and also will
     include a 'format' attribute for each quantity that indicates whether the quantity is a single value, a series
-    (i.e., values are per conformer), and if the value is per atom, per molecule, or a scalar/string for the record.
+    (i.e., values are per conformation), and if the value is per atom, per molecule, or a scalar/string for the record.
 
     Parameters
     ----------
@@ -22,8 +22,8 @@ def dict_to_hdf5(
     data: list of dicts, required
         List that contains dictionaries of properties for each molecule to write to file.
     series_info: dict, required
-        Defines whether a piece of data containers a series of data associated with different conformers
-        and/or per-atom or per-molecule quantitites.
+        Defines whether a piece of data containers a series of data associated with different conformations
+        and/or per-atom or per-system quantitites.
         Options in dictionary include 'single_rec', 'single_atom', 'single_mol', 'series_atom', 'series_mol'.
     id_key: str, required
         Name of the key in the dicts that uniquely describes each record.
@@ -172,14 +172,14 @@ class DatasetCuration(ABC):
                         )
 
     @property
-    def total_conformers(self) -> int:
+    def total_conformations(self) -> int:
         """
-        Returns the total number of conformers in the dataset.
+        Returns the total number of conformations in the dataset.
 
         Returns
         -------
         int
-            Total number of conformers in the dataset.
+            Total number of conformations in the dataset.
 
         """
         total = 0
@@ -188,9 +188,9 @@ class DatasetCuration(ABC):
         return total
 
     @property
-    def total_records(self) -> int:
+    def total_systems(self) -> int:
         """
-        Returns the total number of records in the dataset.
+        Returns the total number of systems in the dataset.
 
         Returns
         -------
@@ -205,7 +205,7 @@ class DatasetCuration(ABC):
         self,
         force_download: bool = False,
         max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
+            max_conformations_per_system: Optional[int] = None,
         total_conformers: Optional[int] = None,
     ) -> None:
         """
@@ -219,7 +219,7 @@ class DatasetCuration(ABC):
         max_records: int, optional, default=None
             If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
             Can be used in conjunction with max_conformers_per_record.
-        max_conformers_per_record: int, optional, default=None
+        max_conformations_per_system: int, optional, default=None
             If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
             Can be used in conjunction with max_records or total_conformers.
         total_conformers: int, optional, default=None
@@ -244,11 +244,12 @@ class DatasetCuration(ABC):
         """
         Init the dictionary that defines the format of the data.
 
-        For data efficiency, information for different conformers will be grouped together
-        To make it clear to the dataset loader which pieces of information are common to all
-        conformers or which quantities are series (i.e., have different values for each conformer).
-        These labels will also allow us to define whether a given entry is per-atom, per-molecule,
-        or is a scalar/string that applies to the entire record.
+        For data efficiency, information for different conformations of the same system will be grouped together
+        to make it clear to the dataset loader which pieces of information are common to all
+        conformations or which quantities are series (i.e., have different values for each conformation).
+        These labels will also allow us to define whether a given entry is per-atom, per-conformation,
+        or is a scalar/string that applies to the entire system.
+
         Options include:
         single_rec, e.g., name, n_conformations, smiles
         single_atom, e.g., atomic_numbers (these are the same for all conformers)

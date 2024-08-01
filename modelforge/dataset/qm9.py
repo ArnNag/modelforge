@@ -16,7 +16,7 @@ class QM9Dataset(HDF5Dataset):
         Name of the dataset, default is "QM9".
     version_select : str
         Select the version of the dataset to use, default will provide the "latest".
-        "latest_test" will select the testing subset of 1000 conformers.
+        "latest_test" will select the testing subset of 1000 conformations.
         A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
     local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
@@ -78,7 +78,7 @@ class QM9Dataset(HDF5Dataset):
             Name of the dataset, by default "QM9".
         version_select : str,optional
             Select the version of the dataset to use, default will provide the "latest".
-            "latest_test" will select the testing subset of 1000 conformers.
+            "latest_test" will select the testing subset of 1000 conformations.
         A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".

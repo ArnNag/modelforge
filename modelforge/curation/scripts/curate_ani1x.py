@@ -83,12 +83,12 @@ def ani1x_wrapper(
     )
     ani1x.process(
         force_download=force_download,
-        max_records=max_records,
-        max_conformers_per_record=max_conformers_per_record,
-        total_conformers=total_conformers,
+        max_systems=max_records,
+        max_conformations_per_system=max_conformers_per_record,
+        total_conformations=total_conformers,
     )
-    print(f"Total records: {ani1x.total_records}")
-    print(f"Total conformers: {ani1x.total_conformers}")
+    print(f"Total records: {ani1x.total_systems}")
+    print(f"Total conformers: {ani1x.total_conformations}")
 
 
 def main():

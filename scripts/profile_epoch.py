@@ -13,7 +13,7 @@ def perform_training(trainer, model, dm):
 
 
 def setup(potential_name: str):
-    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+    from modelforge.dataset.utils import RandomSystemSplittingStrategy
     from lightning import Trainer
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.dataset.dataset import DataModule
@@ -45,7 +45,7 @@ def setup(potential_name: str):
     dm = DataModule(
         name=dataset_name,
         batch_size=batch_size,
-        splitting_strategy=RandomRecordSplittingStrategy(),
+        splitting_strategy=RandomSystemSplittingStrategy(),
         remove_self_energies=remove_self_energies,
         version_select=version_select,
     )
