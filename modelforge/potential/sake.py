@@ -132,6 +132,7 @@ class SAKECore(CoreNetwork):
                 maximum_interaction_radius=maximum_interaction_radius,
                 number_of_radial_basis_functions=number_of_radial_basis_functions,
                 epsilon=epsilon,
+                number_of_euclidean_features=3,
                 scale_factor=(1.0 * unit.nanometer),  # TODO: switch to angstrom
             )
             for _ in range(self.nr_interaction_blocks)
@@ -222,6 +223,7 @@ class SAKEInteraction(nn.Module):
         activation: nn.Module,
         maximum_interaction_radius: unit.Quantity,
         number_of_radial_basis_functions: int,
+            number_of_euclidean_features: int,
         epsilon: float,
         scale_factor: unit.Quantity,
     ):
@@ -266,6 +268,7 @@ class SAKEInteraction(nn.Module):
         self.nr_atom_basis_velocity = nr_atom_basis_velocity
         self.nr_coefficients = nr_coefficients
         self.nr_heads = nr_heads
+        self.number_of_euclidean_features = number_of_euclidean_features
         self.epsilon = epsilon
         self.radial_symmetry_function_module = PhysNetRadialBasisFunction(
             number_of_radial_basis_functions=number_of_radial_basis_functions,
@@ -407,7 +410,7 @@ class SAKEInteraction(nn.Module):
         Parameters
         ----------
         v : torch.Tensor
-            Input node velocity features. Shape [nr_of_atoms_in_systems, geometry_basis].
+            Input node velocity features. Shape [nr_of_atoms_in_systems, number_of_euclidean_features].
         h : torch.Tensor
             Input node semantic features. Shape [nr_of_atoms_in_systems, nr_atom_basis].
         combinations : torch.Tensor
@@ -418,7 +421,7 @@ class SAKEInteraction(nn.Module):
         Returns
         -------
         torch.Tensor
-            Updated velocity features. Shape [nr_of_atoms_in_systems, geometry_basis].
+            Updated velocity features. Shape [nr_of_atoms_in_systems, number_of_euclidean_features].
         """
         v_ij = self.v_mixing_mlp(combinations.transpose(-1, -2)).squeeze(-1)
         expanded_idx_i = idx_i.view(-1, 1).expand_as(v_ij)
@@ -437,14 +440,14 @@ class SAKEInteraction(nn.Module):
         h_ij_semantic : torch.Tensor
             Edge semantic attention. Shape [nr_pairs, nr_heads * nr_edge_basis].
         dir_ij : torch.Tensor
-            Normalized direction from receivers to senders. Shape [nr_pairs, geometry_basis].
+            Normalized direction from receivers to senders. Shape [nr_pairs, number_of_euclidean_features].
 
         Returns
         -------
         torch.Tensor
-            Linear combinations of mixed edge features. Shape [nr_pairs, nr_coefficients, geometry_basis].
+            Linear combinations of mixed edge features. Shape [nr_pairs, nr_coefficients, number_of_euclidean_features].
         """
-        # p: nr_pairs, x: geometry_basis, c: nr_coefficients
+        # p: nr_pairs, x: number_of_euclidean_features, c: nr_coefficients
         return torch.einsum("px,pc->pcx", dir_ij, self.x_mixing_mlp(h_ij_semantic))
 
     def get_spatial_attention(self, combinations, idx_i, nr_atoms):
@@ -455,7 +458,7 @@ class SAKEInteraction(nn.Module):
         Parameters
         ----------
         combinations : torch.Tensor
-            Linear combinations of mixed edge features. Shape [nr_pairs, nr_coefficients, geometry_basis].
+            Linear combinations of mixed edge features. Shape [nr_pairs, nr_coefficients, number_of_euclidean_features].
         idx_i : torch.Tensor
             Indices of the receiver nodes. Shape [nr_pairs, ].
         nr_atoms : in
@@ -551,9 +554,9 @@ class SAKEInteraction(nn.Module):
         h : torch.Tensor
             Input semantic (invariant) atomic embeddings. Shape [nr_of_atoms_in_systems, nr_atom_basis].
         x : torch.Tensor
-            Input position (equivariant) atomic embeddings. Shape [nr_of_atoms_in_systems, geometry_basis].
+            Input position (equivariant) atomic embeddings. Shape [nr_of_atoms_in_systems, number_of_euclidean_features].
         v : torch.Tensor
-            Input velocity (equivariant) atomic embeddings. Shape [nr_of_atoms_in_systems, geometry_basis].
+            Input velocity (equivariant) atomic embeddings. Shape [nr_of_atoms_in_systems, number_of_euclidean_features].
         pairlist : torch.Tensor, shape (2, nr_pairs)
 
         Returns
@@ -562,7 +565,8 @@ class SAKEInteraction(nn.Module):
             Updated scalar and vector representations (h, x, v) with same shapes as input.
         """
         idx_i, idx_j = pairlist
-        nr_of_atoms_in_all_systems, _ = x.shape
+        nr_of_atoms_in_all_systems = x.shape[0]
+        assert x.shape[1] == self.number_of_euclidean_features
         r_ij = x[idx_j] - x[idx_i]
         d_ij = torch.sqrt((r_ij**2).sum(dim=1) + self.epsilon)
         dir_ij = r_ij / (d_ij.unsqueeze(-1) + self.epsilon)

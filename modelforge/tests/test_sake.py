@@ -62,7 +62,7 @@ def test_forward(single_batch_with_batchsize_64):
 def test_interaction_forward():
     nr_atoms = 41
     nr_atom_basis = 47
-    geometry_basis = 3
+    number_of_euclidean_features = 3
     sake_block = SAKEInteraction(
         nr_atom_basis=nr_atom_basis,
         nr_edge_basis=37,
@@ -77,11 +77,12 @@ def test_interaction_forward():
         maximum_interaction_radius=(5.0 * unit.angstrom),
         number_of_radial_basis_functions=53,
         epsilon=1e-5,
+        number_of_euclidean_features=3,
         scale_factor=(1.0 * unit.nanometer),
     )
     h = torch.randn(nr_atoms, nr_atom_basis)
-    x = torch.randn(nr_atoms, geometry_basis)
-    v = torch.randn(nr_atoms, geometry_basis)
+    x = torch.randn(nr_atoms, number_of_euclidean_features)
+    v = torch.randn(nr_atoms, number_of_euclidean_features)
     pairlist = torch.cartesian_prod(torch.arange(nr_atoms), torch.arange(nr_atoms))
     nr_pairs = 43
     edge_mask = onp.random.choice(len(pairlist), nr_pairs, replace=False)
@@ -188,6 +189,7 @@ def make_reference_equivalent_sake_interaction(out_features, hidden_features, nr
         activation=torch.nn.SiLU(),
         maximum_interaction_radius=radial_max_distance,
         number_of_radial_basis_functions=50,
+        number_of_euclidean_features=3,
         epsilon=1e-5,
         scale_factor=(1.0 * unit.nanometer),
     )
@@ -291,7 +293,7 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     nr_atoms = 13
     out_features = 11
     hidden_features = 7
-    geometry_basis = 3
+    number_of_euclidean_features = 3
     nr_heads = 5
     nr_atom_basis = out_features
     nr_pairs = 17
@@ -308,12 +310,12 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
     # Generate random input data in JAX
     h_key, x_key, v_key, init_key = jax.random.split(key, 4)
     h_jax = jax.random.normal(h_key, (nr_atoms, nr_atom_basis))
-    x_jax = jax.random.normal(x_key, (nr_atoms, geometry_basis))
+    x_jax = jax.random.normal(x_key, (nr_atoms, number_of_euclidean_features))
     if v_is_none:
         v_jax = None
-        v = torch.zeros((nr_atoms, geometry_basis))
+        v = torch.zeros((nr_atoms, number_of_euclidean_features))
     else:
-        v_jax = jax.random.normal(v_key, (nr_atoms, geometry_basis))
+        v_jax = jax.random.normal(v_key, (nr_atoms, number_of_euclidean_features))
         v = torch.from_numpy(onp.array(v_jax))
 
     # Convert the input tensors from JAX to torch and reshape to diagonal batching
@@ -441,7 +443,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
         },
         number_of_interaction_modules=nr_interaction_blocks,
         number_of_spatial_attention_heads=nr_heads,
-        radial_max_distance=cutoff,
+        maximum_interaction_radius=cutoff,
         number_of_radial_basis_functions=50,
         epsilon=1e-8,
         postprocessing_parameter={
@@ -451,6 +453,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
                 "keep_per_atom_property": True,
             }
         },
+        activation_function_parameter={"activation_function": "SiLU", "activation": torch.nn.SiLU},
     )
 
     ref_sake = reference_sake.models.DenseSAKEModel(
@@ -458,7 +461,7 @@ def test_model_against_reference(single_batch_with_batchsize_1):
         out_features=1,
         depth=nr_interaction_blocks,
         n_heads=nr_heads,
-        radial_max_distance=None,
+        cutoff=None,
     )
 
     # get methane input
